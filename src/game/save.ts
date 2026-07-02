@@ -1,0 +1,70 @@
+import type { GameState } from './types'
+import { SAVE_VERSION } from './types'
+
+const STORAGE_KEY = 'rugpull-tycoon.basement-launch.v1'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function looksLikeGameState(value: unknown): value is GameState {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    value.saveVersion === SAVE_VERSION &&
+    isRecord(value.resources) &&
+    isRecord(value.currentCoin) &&
+    isRecord(value.upgrades) &&
+    isRecord(value.cards) &&
+    isRecord(value.event) &&
+    Array.isArray(value.tickerHistory) &&
+    Array.isArray(value.chartPoints)
+  )
+}
+
+export function loadGame() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY)
+
+    if (!raw) {
+      return null
+    }
+
+    const parsed: unknown = JSON.parse(raw)
+
+    if (!looksLikeGameState(parsed)) {
+      return null
+    }
+
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+export function saveGame(state: GameState) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  const payload: GameState = {
+    ...state,
+    lastSavedAt: Date.now(),
+  }
+
+  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+}
+
+export function clearSave() {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.removeItem(STORAGE_KEY)
+}
