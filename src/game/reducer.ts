@@ -249,7 +249,20 @@ function applyEventReward(state: GameState, taskId: keyof EventProgress): GameSt
   let next = state
 
   if (taskId === 'sendCandle') {
-    next = awardLiquidity(next, 250, 5)
+    // v0.3.1: award Liquidity as spendable *currency* only — deliberately NOT
+    // through awardLiquidity(), so this milestone reward never jumps the bonding
+    // curve. In v0.3 this granted +250 curve-driving Liquidity (~+25% curve),
+    // which skipped most of the pressure loop. It now buys ~an upgrade's worth of
+    // firepower and feels good, but you still have to tap the curve up yourself.
+    const bonus = 200
+    next = {
+      ...next,
+      resources: {
+        ...next.resources,
+        liquidity: next.resources.liquidity + bonus,
+      },
+      totalLiquidityEarned: next.totalLiquidityEarned + bonus,
+    }
   }
 
   if (taskId === 'buyUpgrades') {

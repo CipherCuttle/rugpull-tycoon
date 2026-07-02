@@ -9,7 +9,7 @@ export const BULL_TRAP_WEEK: EventTrackDefinition = {
       id: 'sendCandle',
       label: 'Send the candle 25 times',
       target: 25,
-      rewardText: '+250 Liquidity',
+      rewardText: '+200 Liquidity (wallet)',
     },
     {
       id: 'buyUpgrades',

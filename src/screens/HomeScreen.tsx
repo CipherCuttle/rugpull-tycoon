@@ -1,6 +1,7 @@
 import { useState, type Dispatch } from 'react'
 import { CardAlbum } from '../components/CardAlbum'
 import { CardRevealModal } from '../components/CardRevealModal'
+import { DevTuningStats } from '../components/DevTuningStats'
 import { EventPanel } from '../components/EventPanel'
 import { FakeChart } from '../components/FakeChart'
 import { MainActionButton } from '../components/MainActionButton'
@@ -136,6 +137,9 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
 
       {/* 5. Card reveal modal, mounted once regardless of active drawer */}
       <CardRevealModal pendingCardReveal={state.pendingCardReveal} />
+
+      {/* Dev-only tuning readout (stripped from production builds). */}
+      {import.meta.env.DEV ? <DevTuningStats state={state} /> : null}
 
       {/* 7. Theatrical graduation modal */}
       <PrestigeModal

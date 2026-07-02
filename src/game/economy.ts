@@ -2,7 +2,14 @@ import { CARDS } from '../data/cards'
 import { getUpgrade, UPGRADES } from '../data/upgrades'
 import type { GameState } from './types'
 
-export const BONDING_CURVE_TARGET_LIQUIDITY = 1000
+// v0.3.1 Economy Tuning: the amount of *curve-driving* Liquidity needed to fill
+// the bonding curve from 0→100%. Raised 13× from v0.3 (was 1000) so a full
+// graduation takes ~2–4 minutes of active tapping instead of ~15 seconds. This
+// only stretches the bar — Liquidity still accrues at the same rate for buying
+// upgrades, so the button keeps its punchy feel while Chart Gravity has room to
+// actually matter between taps. Existing saves keep their 0–100% progress; only
+// forward pacing changes, so this is save-compatible.
+export const BONDING_CURVE_TARGET_LIQUIDITY = 13000
 export const COPE_CRATE_COST = 4
 
 // --- v0.3 Chart Gravity constants ---
