@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { getComboCritBonus, getIsNearTierFloor, getSurfZone, OVERDRIVE_DURATION_MS } from '../game/economy'
+import {
+  BREAKOUT_QUALITY_ARM_THRESHOLD,
+  getComboCritBonus,
+  getIsNearTierFloor,
+  getSurfZone,
+  OVERDRIVE_DURATION_MS,
+} from '../game/economy'
 import { playSound } from '../game/sound'
 import type { GameState } from '../game/types'
 
@@ -40,6 +46,9 @@ function chainTierClass(multiplier: number): string {
 // gain/chain/micro text directly over the button's own big label.
 const SUPERCHARGE_PULSE_MS = 480
 const BREAKOUT_REWARD_TEXT_MS = 1500
+// v0.4C: how long a rejected/overheated tap's "why didn't that charge" note holds
+// the rail before it falls back to the live Supercharge/quality-gate readout.
+const SUPERCHARGE_NOTE_TEXT_MS = 1400
 
 export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: MainActionButtonProps) {
   const [pulsing, setPulsing] = useState(false)
@@ -48,6 +57,7 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   const [breakoutReward, setBreakoutReward] = useState<{ chain: number; superchargeGain: number; curvePercent: number } | null>(
     null,
   )
+  const [superchargeNote, setSuperchargeNote] = useState<{ text: string; kind: 'loss' | 'blocked' } | null>(null)
   const lastTapId = useRef<number | null>(null)
   const wasDecaying = useRef(false)
 
@@ -91,6 +101,21 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
     }
   }, [state.lastTapEffect])
 
+  // v0.4C: a rejected/overheated tap explains itself on the same rail slot the
+  // breakout reward uses — "why didn't the meter move" instead of a silent no-op.
+  useEffect(() => {
+    const note = state.lastTapEffect?.superchargeNote
+
+    if (!note) {
+      return
+    }
+
+    setSuperchargeNote(note)
+    const noteTimeout = window.setTimeout(() => setSuperchargeNote(null), SUPERCHARGE_NOTE_TEXT_MS)
+
+    return () => window.clearTimeout(noteTimeout)
+  }, [state.lastTapEffect])
+
   // v0.3: brief green "recovering" flash the moment an active decay is broken.
   useEffect(() => {
     if (wasDecaying.current && !state.isDecaying) {
@@ -129,6 +154,26 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   const overdriveRemaining = overdrive ? Math.max(0, state.overdriveUntil - Date.now()) : 0
   const overdriveSeconds = Math.ceil(overdriveRemaining / 1000)
   const overdrivePct = Math.min(100, (overdriveRemaining / OVERDRIVE_DURATION_MS) * 100)
+
+  // v0.4C Overdrive Quality Gate: the meter alone no longer arms Overdrive — it
+  // also needs recent breakout quality. Only surfaced once Supercharge is close
+  // to full so early-game doesn't get a wall of gate copy it can't act on yet.
+  const qualityRemaining = Math.max(0, Math.ceil(BREAKOUT_QUALITY_ARM_THRESHOLD - state.breakoutQualityScore))
+  const qualityReady = qualityRemaining <= 0
+  const showQualityHint = launched && !graduateReady && !overdrive && superchargePct >= 60
+  const cleanBreakoutsCopy = `${qualityRemaining} MORE CLEAN BREAKOUT${qualityRemaining === 1 ? '' : 'S'}`
+  let superchargeLabel: string
+  if (supercharged) {
+    superchargeLabel = qualityReady
+      ? 'OVERDRIVE READY'
+      : qualityRemaining >= BREAKOUT_QUALITY_ARM_THRESHOLD
+        ? 'MASH OPEN — NEED CLEAN BREAKOUTS'
+        : `MASH OPEN — ${cleanBreakoutsCopy}`
+  } else if (showQualityHint) {
+    superchargeLabel = qualityReady ? 'BREAKOUTS ARM OVERDRIVE' : cleanBreakoutsCopy
+  } else {
+    superchargeLabel = 'SUPERCHARGE'
+  }
 
   // v0.4A: the button is the main instruction surface for the Resistance loop.
   // Its copy is keyed to the resistance phase (with launch / graduate / overdrive
@@ -241,7 +286,7 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
         <div
           className={`supercharge-rail ${supercharged ? 'full' : ''} ${overdrive ? 'overdrive' : ''} ${
             superchargePulse ? 'breakout-pulse' : ''
-          }`}
+          } ${supercharged && !qualityReady ? 'blocked' : ''} ${superchargeNote ? `charge-${superchargeNote.kind}` : ''}`}
           aria-label={overdrive ? 'Overdrive countdown' : 'Supercharge meter'}
         >
           {overdrive ? (
@@ -262,9 +307,17 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
               </div>
               <strong className="supercharge-value">{superchargePct}%</strong>
             </>
+          ) : superchargeNote ? (
+            <>
+              <span className={`supercharge-label note-${superchargeNote.kind}`}>{superchargeNote.text}</span>
+              <div className="supercharge-track">
+                <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />
+              </div>
+              <strong className="supercharge-value">{superchargePct}%</strong>
+            </>
           ) : (
             <>
-              <span className="supercharge-label">{supercharged ? 'MASH WINDOW OPEN' : 'SUPERCHARGE'}</span>
+              <span className="supercharge-label">{superchargeLabel}</span>
               <div className="supercharge-track">
                 <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />
               </div>

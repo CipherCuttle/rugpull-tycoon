@@ -19,12 +19,19 @@ import {
 } from '../data/tickerLines'
 import { UPGRADES } from '../data/upgrades'
 import {
+  BREAKOUT_QUALITY_ARM_THRESHOLD,
+  BREAKOUT_QUALITY_DECAY_PER_SEC,
+  BREAKOUT_QUALITY_GAIN_GOOD,
+  BREAKOUT_QUALITY_GAIN_PERFECT,
+  BREAKOUT_QUALITY_LOSS,
+  BREAKOUT_QUALITY_MAX,
   COMBO_BREAK_MS,
   COMBO_WINDOW_MS,
   COPE_CRATE_COST,
   GRACE_TICKS,
   getBondingCurveDelta,
   getBondingCurveTier,
+  getBreakoutComboScale,
   getCardUnlockChance,
   getChartAutoImpulse,
   getChartFrictionScale,
@@ -44,6 +51,7 @@ import {
   getTapRatingHeatScale,
   getTapRatingImpulseScale,
   getTapRatingRewardScale,
+  getTapSuperchargeTrickle,
   getTierFloor,
   getTotalUpgradeLevels,
   getUpgradeCost,
@@ -52,12 +60,12 @@ import {
   OVERDRIVE_CURVE_BONUS,
   OVERDRIVE_DURATION_MS,
   OVERDRIVE_IMPULSE_SCALE,
-  SUPERCHARGE_BUILD_PER_SEC,
   SUPERCHARGE_CHAIN_MIN,
   SUPERCHARGE_DECAY_PER_SEC,
   SUPERCHARGE_HEAT_SCALE,
   SUPERCHARGE_IMPULSE_SCALE,
   SUPERCHARGE_MAX,
+  SUPERCHARGE_REJECT_LOSS,
 } from './economy'
 import {
   advanceChart,
@@ -128,6 +136,7 @@ export function createInitialGame(): GameState {
     supercharge: 0,
     superchargeFullMs: 0,
     overdriveUntil: 0,
+    breakoutQualityScore: 0,
     fountainEvents: [],
     fountainSeq: 0,
     chart,
@@ -535,13 +544,16 @@ function launchCoin(state: GameState): GameState {
 // 2–4 min graduation pacing (verified via the headless sim).
 const BREAKOUT_CURVE_BONUS_PERFECT = 0.7
 const BREAKOUT_CURVE_BONUS_GOOD = 0.35
-// v0.4B: BREAKOUT should visibly do something beyond a combat-text burst — a
-// direct Supercharge nudge (on top of the chain it keeps alive) plus a compact
-// reward readout (see TapEffect.breakoutReward) rendered next to the button.
-const BREAKOUT_SUPERCHARGE_GAIN_PERFECT = 10
-const BREAKOUT_SUPERCHARGE_GAIN_GOOD = 5
+// v0.4C Overdrive Quality Gate: this is now the PRIMARY Overdrive fuel (the tick
+// loop no longer builds Supercharge off raw combo — see updateStreakMeters), so
+// the perfect/good gap widened from v0.4B's 10/5 to make timing read as clearly
+// worth more than volume. Combo may still nudge this (getBreakoutComboScale),
+// capped to a 1.3× bump so a long chain alone can't out-fuel actual timing.
+const BREAKOUT_SUPERCHARGE_GAIN_PERFECT = 16
+const BREAKOUT_SUPERCHARGE_GAIN_GOOD = 8
 
 type BreakoutReward = { chain: number; superchargeGain: number; curvePercent: number }
+type SuperchargeNote = { text: string; kind: 'loss' | 'blocked' }
 
 // v0.4A Resistance Breakout. Read AFTER the tap's chart impulse has landed and
 // classify what it did to the line, then stamp the matching arcade event beat
@@ -552,7 +564,7 @@ function resolveResistanceTap(
   now: number,
   walletGain: number,
   isOverdrive: boolean,
-): { next: GameState; rating: TapRating | null; breakoutReward: BreakoutReward | null } {
+): { next: GameState; rating: TapRating | null; breakoutReward: BreakoutReward | null; superchargeNote: SuperchargeNote | null } {
   const overheated = state.chart.heat > OVERHEAT && !isOverdrive
   const outcome = resolveBreakoutTap(state.resistance, state.chart, now, overheated)
 
@@ -580,8 +592,13 @@ function resolveResistanceTap(
     const bonusCurve = walletGain * (perfect ? BREAKOUT_CURVE_BONUS_PERFECT : BREAKOUT_CURVE_BONUS_GOOD)
     const curvePercent = getBondingCurveDelta(next, bonusCurve)
     next = awardLiquidity(next, 0, bonusCurve)
-    const superchargeGain = perfect ? BREAKOUT_SUPERCHARGE_GAIN_PERFECT : BREAKOUT_SUPERCHARGE_GAIN_GOOD
-    next = { ...next, supercharge: Math.min(SUPERCHARGE_MAX, next.supercharge + superchargeGain) }
+    const baseSuperchargeGain = perfect ? BREAKOUT_SUPERCHARGE_GAIN_PERFECT : BREAKOUT_SUPERCHARGE_GAIN_GOOD
+    const superchargeGain = Math.round(baseSuperchargeGain * getBreakoutComboScale(next.comboMultiplier))
+    const breakoutQualityScore = Math.min(
+      BREAKOUT_QUALITY_MAX,
+      next.breakoutQualityScore + (perfect ? BREAKOUT_QUALITY_GAIN_PERFECT : BREAKOUT_QUALITY_GAIN_GOOD),
+    )
+    next = { ...next, supercharge: Math.min(SUPERCHARGE_MAX, next.supercharge + superchargeGain), breakoutQualityScore }
     next = pushFountain(next, perfect ? 'BREAKOUT PERFECT' : 'GOOD BREAKOUT', 'breakout')
     if (streak >= 2) {
       next = pushFountain(next, `CHAIN ×${streak}`, 'chain')
@@ -590,6 +607,7 @@ function resolveResistanceTap(
       next,
       rating: perfect ? 'perfect' : 'good',
       breakoutReward: { chain: streak, superchargeGain, curvePercent },
+      superchargeNote: null,
     }
   }
 
@@ -600,8 +618,12 @@ function resolveResistanceTap(
     // fires on the tap that *first* trips TOO HOT — resolveBreakoutTap freezes
     // repeat taps while the hold is already active (chart.ts), so the scold and
     // its combat text can't spam every tap.
+    // v0.4C: no Supercharge is taken (the chart's heat/reversal already punishes
+    // this state hard), but it costs breakout-quality standing — mashing through
+    // TOO HOT can't accidentally coast the Overdrive gate open.
     let next: GameState = {
       ...state,
+      breakoutQualityScore: Math.max(0, state.breakoutQualityScore - BREAKOUT_QUALITY_LOSS),
       resistance: {
         ...state.resistance,
         phase: 'overheated',
@@ -612,17 +634,21 @@ function resolveResistanceTap(
       },
     }
     next = pushFountain(next, 'TOO HOT', 'reject')
-    return { next, rating: 'overheated', breakoutReward: null }
+    return { next, rating: 'overheated', breakoutReward: null, superchargeNote: { text: 'TOO HOT — NO CHARGE', kind: 'blocked' } }
   }
 
   if (outcome === 'rejected') {
     // Pushed above the line without a clean hit: a red rejection candle, a heat
     // spike, and chain damage — one miss stings but never ends the run.
+    // v0.4C: also drains banked Supercharge and breakout-quality standing — a
+    // mistimed smash should visibly cost the Overdrive route, not just the combo.
     const combo = Math.floor(state.combo / 2)
     let next: GameState = {
       ...state,
       combo,
       comboMultiplier: getComboMultiplier(combo),
+      supercharge: Math.max(0, state.supercharge - SUPERCHARGE_REJECT_LOSS),
+      breakoutQualityScore: Math.max(0, state.breakoutQualityScore - BREAKOUT_QUALITY_LOSS),
       resources: { ...state.resources, heat: state.resources.heat + 4 },
       resistance: {
         ...state.resistance,
@@ -638,12 +664,14 @@ function resolveResistanceTap(
     }
     next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: 14 }, now)
     next = pushFountain(next, 'REJECTED', 'reject')
-    return { next, rating: 'rejected', breakoutReward: null }
+    return { next, rating: 'rejected', breakoutReward: null, superchargeNote: { text: 'REJECTED — CHARGE LOST', kind: 'loss' } }
   }
 
   // 'weak' (building momentum below the line) / 'none' (mid event beat): no penalty
-  // and no combat text — the button already reads BUILD MOMENTUM here.
-  return { next: state, rating: outcome === 'weak' ? 'weak' : null, breakoutReward: null }
+  // and no combat text — the button already reads BUILD MOMENTUM here. v0.4C: a
+  // tiny Supercharge trickle still applies (see sendCandle), just not enough to
+  // matter on its own.
+  return { next: state, rating: outcome === 'weak' ? 'weak' : null, breakoutReward: null, superchargeNote: null }
 }
 
 function sendCandle(state: GameState, now: number): GameState {
@@ -746,6 +774,18 @@ function sendCandle(state: GameState, now: number): GameState {
   const resistanceResult = resolveResistanceTap(next, now, walletGain, isOverdrive)
   next = resistanceResult.next
 
+  // v0.4C: a tiny Supercharge trickle for an ordinary tap that never actually hit
+  // the breakout path — casual tapping stays a little alive without becoming a
+  // second, cheaper route to the same fuel a real breakout pays out. Rejected/
+  // overheated taps already had their own (negative or zero) Supercharge delta
+  // applied above, so they're excluded here rather than double-dipped.
+  if (!resistanceResult.breakoutReward && resistanceResult.rating !== 'rejected' && resistanceResult.rating !== 'overheated') {
+    const trickle = getTapSuperchargeTrickle(tapRating)
+    if (trickle > 0) {
+      next = { ...next, supercharge: Math.min(SUPERCHARGE_MAX, next.supercharge + trickle) }
+    }
+  }
+
   // Ticker de-spam (subtask 6): a tap line only on a crit or every 10th tap,
   // instead of one per tap. The chain/chart/button carry the per-tap feedback.
   if (isCrit || tapId % 10 === 0) {
@@ -777,6 +817,7 @@ function sendCandle(state: GameState, now: number): GameState {
       crit: isCrit,
       rating: resistanceResult.rating ?? undefined,
       breakoutReward: resistanceResult.breakoutReward,
+      superchargeNote: resistanceResult.superchargeNote,
     },
   }
 
@@ -1043,10 +1084,19 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
 
 // v0.3.5 Supercharge / Overdrive meters. Runs once per tick AFTER Chart Gravity
 // (which is where an idle Candle Chain breaks), so it reads the freshly-updated
-// combo. Builds supercharge while the chain is alive (faster at higher combo
-// multipliers), bleeds it when broken, and arms a timed Overdrive window once the
-// meter has been pinned at full long enough. All cosmetic/feel — it never touches
-// the bonding curve here (Overdrive's small curve nudge lives in the tap path).
+// combo. Bleeds Supercharge when the chain is broken, and arms a timed Overdrive
+// window once the meter has been pinned at full AND recent breakout quality
+// clears the gate. All cosmetic/feel — it never touches the bonding curve here
+// (Overdrive's small curve nudge lives in the tap path).
+//
+// v0.4C Overdrive Quality Gate: previously this built Supercharge every tick off
+// raw combo length (chainAlive × comboMultiplier), which let pure spam reach
+// Overdrive on volume alone — the sim-verified root cause of spam edging out
+// timed play in aggregate throughput (see memory v04b-focus-spam-punishment). A
+// live chain now only *holds* the meter (no decay) instead of growing it; actual
+// growth comes from per-tap breakout quality (resolveResistanceTap /
+// getTapSuperchargeTrickle in sendCandle). `breakoutQualityScore` tracks recent
+// timing separately and decays on its own — Overdrive requires both gates.
 function updateStreakMeters(state: GameState, now: number, dt: number): GameState {
   const wasSupercharged = getIsSupercharged(state.supercharge)
   const overdriveActive = getIsOverdrive(state.overdriveUntil, now)
@@ -1055,42 +1105,46 @@ function updateStreakMeters(state: GameState, now: number, dt: number): GameStat
   let supercharge = state.supercharge
   let superchargeFullMs = state.superchargeFullMs
   let overdriveUntil = state.overdriveUntil
+  let breakoutQualityScore = Math.max(0, state.breakoutQualityScore - BREAKOUT_QUALITY_DECAY_PER_SEC * dt)
 
   // Overdrive just expired: clear the marker so the UI hides and meters resume.
   if (overdriveUntil > 0 && !overdriveActive) {
     overdriveUntil = 0
   }
 
-  // Advance the meter — frozen (spent) for the duration of an active Overdrive.
-  if (overdriveActive) {
-    // hold at whatever it was reset to
-  } else if (chainAlive) {
-    supercharge = Math.min(SUPERCHARGE_MAX, supercharge + SUPERCHARGE_BUILD_PER_SEC * state.comboMultiplier * dt)
+  // A live chain merely postpones the bleed (no per-tick growth — see header
+  // note); a broken chain lets Supercharge drain back down. Frozen entirely
+  // (held at whatever it was reset to) for the duration of an active Overdrive.
+  if (overdriveActive || chainAlive) {
+    // hold
   } else {
     supercharge = Math.max(0, supercharge - SUPERCHARGE_DECAY_PER_SEC * dt)
   }
 
   const nowSupercharged = getIsSupercharged(supercharge)
+  const qualityReady = breakoutQualityScore >= BREAKOUT_QUALITY_ARM_THRESHOLD
 
-  // Arm Overdrive by holding the meter pinned at full with the chain still alive.
+  // Arm Overdrive by holding the meter pinned at full with recent breakout
+  // quality clearing the gate — raw combo length is no longer sufficient.
   let armedThisTick = false
-  if (!overdriveActive && nowSupercharged && chainAlive) {
+  if (!overdriveActive && nowSupercharged && qualityReady) {
     superchargeFullMs += dt * 1000
     if (superchargeFullMs >= OVERDRIVE_ARM_MS) {
       overdriveUntil = now + OVERDRIVE_DURATION_MS
       supercharge = 0
       superchargeFullMs = 0
+      breakoutQualityScore = 0
       armedThisTick = true
     }
   } else if (!overdriveActive) {
     superchargeFullMs = 0
   }
 
-  let next: GameState = { ...state, supercharge, superchargeFullMs, overdriveUntil }
+  let next: GameState = { ...state, supercharge, superchargeFullMs, overdriveUntil, breakoutQualityScore }
 
   if (armedThisTick) {
     next = pushFountain(next, pickLine(OVERDRIVE_START_LINES, state.taps + state.combo), 'overdrive')
-    next = addTicker(next, 'OVERDRIVE ENGAGED — gravity has left the chat.')
+    next = addTicker(next, 'OVERDRIVE ENGAGED — clean breakouts earned it.')
   } else if (!wasSupercharged && nowSupercharged && !overdriveActive) {
     next = pushFountain(next, pickLine(SUPERCHARGE_ONLINE_LINES, state.taps + state.combo), 'supercharge')
   }

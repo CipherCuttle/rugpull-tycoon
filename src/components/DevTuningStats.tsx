@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { classifyTapRating, OVERHEAT } from '../game/chart'
 import {
+  BREAKOUT_QUALITY_ARM_THRESHOLD,
   getBondingCurveDelta,
   getClickGain,
   getDecayRate,
@@ -99,6 +100,7 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
             supercharge: {state.supercharge.toFixed(0)}%{' '}
             {state.overdriveUntil > Date.now() ? `OVERDRIVE ${Math.ceil((state.overdriveUntil - Date.now()) / 1000)}s` : ''}
           </div>
+          <div>breakout quality: {state.breakoutQualityScore.toFixed(1)} / {BREAKOUT_QUALITY_ARM_THRESHOLD} to arm</div>
           <div>
             chart: {state.chart.price.toFixed(1)} v{state.chart.velocity.toFixed(1)} h{state.chart.heat.toFixed(0)}
           </div>

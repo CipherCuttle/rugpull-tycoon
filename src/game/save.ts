@@ -88,6 +88,10 @@ function migrateGameState(value: GameState): GameState {
     supercharge: raw.supercharge ?? 0,
     superchargeFullMs: raw.superchargeFullMs ?? 0,
     overdriveUntil: raw.overdriveUntil ?? 0,
+    // v0.4C Overdrive Quality Gate. Additive: an old save simply starts the gate
+    // closed (0) on next load — no different from a fresh run that hasn't landed
+    // a breakout yet.
+    breakoutQualityScore: raw.breakoutQualityScore ?? 0,
     fountainEvents: [],
     fountainSeq: raw.fountainSeq ?? 0,
     // v0.3.4 Candlestick Physics: additive. Old saves (which stored surfPressure

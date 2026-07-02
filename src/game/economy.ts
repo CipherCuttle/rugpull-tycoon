@@ -34,23 +34,75 @@ export const COMBO_BREAK_MS = 1000
 export const COMBO_MAX_MULTIPLIER = 3
 
 // --- v0.3.5 Supercharge / Overdrive constants ---
-// Supercharge meter runs 0–100. It builds every tick while the Candle Chain is
-// alive (combo ≥ CHAIN_MIN), scaled by the live combo multiplier, so a hot chain
-// fills it in ~5–7s and a lukewarm one in ~12s. It bleeds slowly on a broken
-// chain. At 100 the run is "Supercharged".
+// Supercharge meter runs 0–100. It bleeds slowly whenever the Candle Chain is
+// broken. At 100 the run is "Supercharged" (cooler mashing, punchier taps).
+//
+// v0.4C Overdrive Quality Gate: raw combo length no longer *fuels* this meter —
+// holding a chain merely postpones the decay below. The actual fuel is
+// per-tap/breakout quality (see BREAKOUT_SUPERCHARGE_GAIN_* and
+// getTapSuperchargeTrickle), so a hot chain of mistimed spam sits flat instead
+// of climbing on its own. "Spam builds heat. Timing breaks walls."
 export const SUPERCHARGE_MAX = 100
 export const SUPERCHARGE_CHAIN_MIN = 5
-export const SUPERCHARGE_BUILD_PER_SEC = 6
 export const SUPERCHARGE_DECAY_PER_SEC = 8
 // While Supercharged, mashing heat builds at this fraction (cooler), and taps hit
 // this much harder into the chart.
 export const SUPERCHARGE_HEAT_SCALE = 0.55
 export const SUPERCHARGE_IMPULSE_SCALE = 1.15
-// Hold Supercharge pinned at 100 (with the chain alive) this long to arm
-// Overdrive, which then runs for OVERDRIVE_DURATION_MS. Entering Overdrive spends
-// the meter back to 0, so it must be rebuilt for the next one.
+// Hold Supercharge pinned at 100 (with the quality gate cleared — see
+// BREAKOUT_QUALITY_ARM_THRESHOLD) this long to arm Overdrive, which then runs
+// for OVERDRIVE_DURATION_MS. Entering Overdrive spends the meter back to 0 and
+// consumes the quality gate, so both must be rebuilt for the next one.
 export const OVERDRIVE_ARM_MS = 4000
 export const OVERDRIVE_DURATION_MS = 8000
+// v0.4C: a tiny per-tap Supercharge trickle for an ordinary/weak tap that never
+// touches the resistance line — enough that casual tapping isn't completely dead,
+// nowhere near enough to arm Overdrive on its own (spam would need ~7 min of
+// nonstop weak taps to fill the meter on trickle alone). Perfect/good taps that
+// (rarely) miss the breakout path still get a small nudge, well under an actual
+// breakout's payout.
+export const SUPERCHARGE_TRICKLE_WEAK = 0.2
+export const SUPERCHARGE_TRICKLE_GOOD = 0.5
+export const SUPERCHARGE_TRICKLE_PERFECT = 1
+// v0.4C: a mistimed tap that gets rejected visibly costs banked charge — "REJECTED
+// — CHARGE LOST". Overheated taps are milder: no charge gained, but nothing taken
+// either ("TOO HOT — NO CHARGE") since the chart's own reversal/heat physics
+// already punish that state hard.
+export const SUPERCHARGE_REJECT_LOSS = 10
+
+// v0.4C Overdrive Quality Gate. `breakoutQualityScore` is a small, fast-moving
+// tally of *recent* breakout quality — separate from the Supercharge number so a
+// player can't bank one great streak and coast on raw combo forever. Perfect/good
+// breakouts raise it, rejected/overheated taps knock it back down, and it decays
+// on its own so "recent" stays honest. Overdrive requires both the meter full AND
+// this score at/above the threshold; it resets to 0 the instant Overdrive fires.
+export const BREAKOUT_QUALITY_MAX = 6
+export const BREAKOUT_QUALITY_ARM_THRESHOLD = 3
+export const BREAKOUT_QUALITY_GAIN_PERFECT = 2
+export const BREAKOUT_QUALITY_GAIN_GOOD = 1
+export const BREAKOUT_QUALITY_LOSS = 1
+export const BREAKOUT_QUALITY_DECAY_PER_SEC = 0.08
+
+export function getTapSuperchargeTrickle(rating: TapRating | null): number {
+  switch (rating) {
+    case 'perfect':
+      return SUPERCHARGE_TRICKLE_PERFECT
+    case 'good':
+      return SUPERCHARGE_TRICKLE_GOOD
+    case 'weak':
+      return SUPERCHARGE_TRICKLE_WEAK
+    default:
+      // 'rejected' / 'overheated' / null (Overdrive bypasses rating entirely).
+      return 0
+  }
+}
+
+// v0.4C: combo may still nudge a breakout's Supercharge payout, but capped hard
+// so a long raw chain can't out-fuel actual timing — combo alone maxes out a 1.3×
+// bump, versus a clean perfect-vs-good breakout call being a ~2× difference.
+export function getBreakoutComboScale(comboMultiplier: number): number {
+  return Math.min(1 + (comboMultiplier - 1) * 0.15, 1.3)
+}
 // During Overdrive: no heat gain, no reversal, punchier taps, a small crit bump,
 // and a modest (not pace-breaking) curve boost.
 export const OVERDRIVE_IMPULSE_SCALE = 1.5
