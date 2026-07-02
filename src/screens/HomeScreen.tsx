@@ -85,6 +85,7 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         tier={state.bondingCurveTier}
         milestoneLabel={milestoneLabel}
         tapEffect={state.lastTapEffect}
+        resistance={state.resistance}
         isDecaying={state.isDecaying}
         supercharged={supercharged}
         overdrive={overdrive}

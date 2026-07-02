@@ -7,6 +7,8 @@
 // Everything here is deterministic (seeded noise), so the headless pacing sim
 // can drive it reproducibly.
 
+import type { ResistanceState, TapRating } from './types'
+
 export interface Candle {
   open: number
   close: number
@@ -81,6 +83,14 @@ export const CHART_HEAT_PER_TAP = 6
 // Mini physics step run on each tap for instant on-screen feedback.
 export const CHART_TAP_STEP = 0.05
 
+// --- v0.4 Resistance Breakout visual target ---
+export const RESISTANCE_WINDOW_MS = 280
+export const RESISTANCE_DRIFT_PER_SEC = 2
+export const RESISTANCE_NEAR_BAND = 3
+export const RESISTANCE_PERFECT_BELOW = 4
+export const RESISTANCE_PERFECT_ABOVE = 6
+export const RESISTANCE_GOOD_BELOW = 18
+
 function roll(seed: number): number {
   const value = Math.sin(seed * 127.11) * 43758.5453
   return value - Math.floor(value)
@@ -92,6 +102,95 @@ function round(value: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
+}
+
+function resistanceSpawnPrice(anchorPrice: number, id: number): number {
+  const spacing = 12 + roll(id * 17.19 + anchorPrice * 0.37) * 6
+  return round(clamp(anchorPrice + spacing, 42, 90))
+}
+
+export function createInitialResistance(anchorPrice: number, id = 1): ResistanceState {
+  return {
+    id,
+    price: resistanceSpawnPrice(anchorPrice, id),
+    crossedAt: 0,
+    windowUntil: 0,
+    lastResistanceHitAt: 0,
+    breakoutStreak: 0,
+    perfectBreakouts: 0,
+    rejections: 0,
+  }
+}
+
+export function advanceResistance(
+  resistance: ResistanceState,
+  chart: ChartState,
+  dt: number,
+  now: number,
+): ResistanceState {
+  const windowActive = resistance.windowUntil > now
+  const expiredWindow = resistance.windowUntil > 0 && !windowActive
+  const driftFloor = Math.min(90, Math.max(42, chart.price + 9))
+  const driftedPrice =
+    chart.price < resistance.price - 5 ? Math.max(driftFloor, resistance.price - RESISTANCE_DRIFT_PER_SEC * dt) : resistance.price
+
+  let next: ResistanceState = {
+    ...resistance,
+    price: round(driftedPrice),
+    crossedAt: expiredWindow ? 0 : resistance.crossedAt,
+    windowUntil: expiredWindow ? 0 : resistance.windowUntil,
+  }
+
+  const distance = next.price - chart.price
+  const shouldRetarget = !windowActive && (chart.price > next.price + 9 || chart.price < next.price - 34)
+
+  if (shouldRetarget) {
+    return {
+      ...createInitialResistance(chart.price, next.id + 1),
+      lastResistanceHitAt: next.lastResistanceHitAt,
+      breakoutStreak: next.breakoutStreak,
+      perfectBreakouts: next.perfectBreakouts,
+      rejections: next.rejections,
+    }
+  }
+
+  if (now > 0 && next.windowUntil === 0 && distance <= RESISTANCE_NEAR_BAND && distance >= -RESISTANCE_PERFECT_ABOVE) {
+    next = {
+      ...next,
+      crossedAt: now,
+      windowUntil: now + RESISTANCE_WINDOW_MS,
+    }
+  }
+
+  return next
+}
+
+export function classifyTapRating(
+  resistance: ResistanceState,
+  chart: ChartState,
+  now: number,
+  overheated: boolean,
+): TapRating {
+  if (overheated) {
+    return 'overheated'
+  }
+
+  const distance = resistance.price - chart.price
+  const windowActive = resistance.windowUntil > now
+
+  if (windowActive && distance >= -RESISTANCE_PERFECT_ABOVE && distance <= RESISTANCE_PERFECT_BELOW) {
+    return 'perfect'
+  }
+
+  if (distance > RESISTANCE_PERFECT_BELOW && distance <= RESISTANCE_GOOD_BELOW) {
+    return 'good'
+  }
+
+  if (distance > RESISTANCE_GOOD_BELOW) {
+    return 'weak'
+  }
+
+  return 'rejected'
 }
 
 export interface ChartAdvanceOpts {

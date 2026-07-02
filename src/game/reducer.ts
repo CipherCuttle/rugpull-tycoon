@@ -56,7 +56,14 @@ import {
   SUPERCHARGE_IMPULSE_SCALE,
   SUPERCHARGE_MAX,
 } from './economy'
-import { advanceChart, createInitialChart, CHART_HEAT_PER_TAP, CHART_TAP_STEP } from './chart'
+import {
+  advanceChart,
+  advanceResistance,
+  createInitialChart,
+  createInitialResistance,
+  CHART_HEAT_PER_TAP,
+  CHART_TAP_STEP,
+} from './chart'
 import type { EventProgress, FountainKind, GameAction, GameState, ResourceState, ToastKind } from './types'
 import { SAVE_VERSION } from './types'
 
@@ -94,6 +101,8 @@ function initialEventProgress(): EventProgress {
 }
 
 export function createInitialGame(): GameState {
+  const chart = createInitialChart()
+
   return {
     saveVersion: SAVE_VERSION,
     resources: initialResources(),
@@ -111,7 +120,8 @@ export function createInitialGame(): GameState {
     overdriveUntil: 0,
     fountainEvents: [],
     fountainSeq: 0,
-    chart: createInitialChart(),
+    chart,
+    resistance: createInitialResistance(chart.price),
     upgrades: initialUpgrades(),
     cards: initialCards(),
     event: {
@@ -170,8 +180,10 @@ function advanceChartState(
   state: GameState,
   dt: number,
   opts: Parameters<typeof advanceChart>[2] = {},
+  now = 0,
 ): GameState {
-  return { ...state, chart: advanceChart(state.chart, dt, opts) }
+  const chart = advanceChart(state.chart, dt, opts)
+  return { ...state, chart, resistance: advanceResistance(state.resistance, chart, dt, now) }
 }
 
 // Single non-blocking toast slot. Each stamp overwrites the previous one, so the
@@ -568,14 +580,19 @@ function sendCandle(state: GameState, now: number): GameState {
   const impulseScale = isOverdrive ? OVERDRIVE_IMPULSE_SCALE : isSupercharged ? SUPERCHARGE_IMPULSE_SCALE : 1
   const heatScale = isOverdrive ? 0 : isSupercharged ? SUPERCHARGE_HEAT_SCALE : 1
   const tapImpulse = getChartTapImpulse(next, comboMultiplier, isCrit) * impulseScale
-  next = advanceChartState(next, CHART_TAP_STEP, {
-    impulse: tapImpulse,
-    heatAdd: CHART_HEAT_PER_TAP + (isCrit ? 4 : 0),
-    heatScale,
-    noReversal: isOverdrive,
-    frictionScale: getChartFrictionScale(comboMultiplier),
-    gravityScale: getChartGravityScale(next),
-  })
+  next = advanceChartState(
+    next,
+    CHART_TAP_STEP,
+    {
+      impulse: tapImpulse,
+      heatAdd: CHART_HEAT_PER_TAP + (isCrit ? 4 : 0),
+      heatScale,
+      noReversal: isOverdrive,
+      frictionScale: getChartFrictionScale(comboMultiplier),
+      gravityScale: getChartGravityScale(next),
+    },
+    now,
+  )
 
   next = awardLiquidity(next, walletGain, curveGain)
 
@@ -618,7 +635,7 @@ function sendCandle(state: GameState, now: number): GameState {
     }
     // A jeet raid stamps a red dump candle — a visible dip mid-mash, shrunk by
     // the Jeet Containment Drone upgrade.
-    next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: getChartJeetDump(next) })
+    next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: getChartJeetDump(next) }, now)
     next = addTicker(next, `${pickLine(JEET_LINES, next.jeetEventsSurvived)} -${loss} Liquidity.`)
   }
 
@@ -756,12 +773,17 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
   // v0.3.5: during Overdrive the idle ticks between mashes must not cook heat or
   // trigger a reversal either, or a fast masher's gaps would still punish them.
   const overdriveActive = getIsOverdrive(state.overdriveUntil, now)
-  const withChart: GameState = advanceChartState({ ...state, idleTicks }, dtSeconds, {
-    gravityScale: getChartGravityScale(state),
-    autoImpulse: getChartAutoImpulse(state),
-    heatScale: overdriveActive ? 0 : 1,
-    noReversal: overdriveActive,
-  })
+  const withChart: GameState = advanceChartState(
+    { ...state, idleTicks },
+    dtSeconds,
+    {
+      gravityScale: getChartGravityScale(state),
+      autoImpulse: getChartAutoImpulse(state),
+      heatScale: overdriveActive ? 0 : 1,
+      noReversal: overdriveActive,
+    },
+    now,
+  )
 
   // Never drift while onboarding (the prestige/graduation modal only opens at
   // 100% where the curve floor already prevents any decay). v0.3.2: the

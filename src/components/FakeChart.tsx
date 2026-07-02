@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { OVERHEAT, type Candle, type ChartState } from '../game/chart'
 import { getSurfZone, getTierFloor } from '../game/economy'
-import type { TapEffect } from '../game/types'
+import type { ResistanceState, TapEffect } from '../game/types'
 
 interface FakeChartProps {
   chart: ChartState
@@ -9,6 +9,7 @@ interface FakeChartProps {
   tier: number
   milestoneLabel: string
   tapEffect: TapEffect | null
+  resistance: ResistanceState
   isDecaying: boolean
   // v0.3.5: streak-mastery aura states (visual only).
   supercharged: boolean
@@ -32,6 +33,7 @@ export function FakeChart({
   tier,
   milestoneLabel,
   tapEffect,
+  resistance,
   isDecaying,
   supercharged,
   overdrive,
@@ -83,6 +85,11 @@ export function FakeChart({
   const overheated = chart.heat > OVERHEAT
   const unstable = zone.zone === 'overheated' || zone.zone === 'graduation' || overheated
   const dumping = !isUp
+  const now = Date.now()
+  const windowActive = resistance.windowUntil > now
+  const distanceToResistance = resistance.price - chart.price
+  const resistanceClose = distanceToResistance <= 18 && distanceToResistance >= -6
+  const rating = tapEffect?.rating
 
   // v0.3 Chart Gravity: a floor marker showing what the current milestone
   // permanently protects, plus a status flag communicating decay vs. held.
@@ -93,6 +100,11 @@ export function FakeChart({
 
   const slot = WIDTH / visible.length
   const bodyWidth = Math.max(1.5, slot * 0.62)
+  const currentCx = (visible.length - 1) * slot + slot / 2
+  const currentCy = priceToY(chart.price)
+  const resistanceY = priceToY(resistance.price)
+  const segmentX = WIDTH * 0.56
+  const segmentWidth = WIDTH - segmentX - 8
 
   return (
     <section
@@ -100,7 +112,11 @@ export function FakeChart({
         milestonePulse ? 'milestone-pulse' : ''
       } ${dumping ? 'dumping' : ''} ${unstable ? 'unstable' : ''} ${isDecaying ? 'decaying' : ''} ${
         overheated ? 'overheated' : ''
-      } ${supercharged ? 'supercharged' : ''} ${overdrive ? 'overdrive' : ''}`}
+      } ${supercharged ? 'supercharged' : ''} ${overdrive ? 'overdrive' : ''} ${
+        windowActive ? 'smash-window' : ''
+      } ${resistanceClose ? 'resistance-close' : ''} ${rating === 'perfect' ? 'breakout-perfect' : ''} ${
+        rating === 'rejected' ? 'rejected' : ''
+      }`}
       aria-label="Fake chart"
     >
       {gravityFlag ? <span className={`chart-gravity-flag ${gravityFlagKind}`}>{gravityFlag}</span> : null}
@@ -109,15 +125,28 @@ export function FakeChart({
       {overdrive ? <span className="chart-overdrive-flag">OVERDRIVE — GRAVITY HAS LEFT THE CHAT</span> : null}
       <div className="chart-header">
         <span className={`surf-zone-label surf-${zone.zone}`}>
-          {zone.label} · {Math.round(chart.price)}
+          RESISTANCE {Math.round(resistance.price)} · PRICE {Math.round(chart.price)}
         </span>
-        <strong className={isUp ? 'chart-up' : 'chart-down'}>{isUp ? 'UP ONLY' : 'DUMPING'}</strong>
+        <strong className={isUp ? 'chart-up' : 'chart-down'}>{windowActive ? 'SMASH' : isUp ? 'UP ONLY' : 'DUMPING'}</strong>
       </div>
       <svg className="fake-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Fictional candlestick chart">
-        {/* Surf-zone band (45–75): the sweet spot the player wants to ride. */}
-        <rect className="chart-surf-band" x="0" y={priceToY(75)} width={WIDTH} height={priceToY(45) - priceToY(75)} />
-        <line x1="0" x2={WIDTH} y1={priceToY(75)} y2={priceToY(75)} stroke="#2c2c2c" strokeDasharray="6 7" />
-        <line x1="0" x2={WIDTH} y1={priceToY(45)} y2={priceToY(45)} stroke="#2c2c2c" strokeDasharray="6 7" />
+        <g className={`chart-resistance-target ${windowActive ? 'active' : ''}`} aria-hidden="true">
+          {windowActive ? (
+            <rect
+              className="chart-smash-window"
+              x={segmentX - 8}
+              y={Math.max(0, resistanceY - 10)}
+              width={segmentWidth + 16}
+              height={20}
+              rx={4}
+            />
+          ) : null}
+          <line className="chart-resistance-line halo" x1={segmentX} x2={WIDTH - 8} y1={resistanceY} y2={resistanceY} />
+          <line className="chart-resistance-line core" x1={segmentX} x2={WIDTH - 8} y1={resistanceY} y2={resistanceY} />
+          <text className="chart-resistance-label" x={segmentX - 8} y={Math.max(10, resistanceY - 8)}>
+            RESISTANCE
+          </text>
+        </g>
         {visible.map((candle, index) => {
           const cx = index * slot + slot / 2
           const up = candle.close >= candle.open
@@ -141,6 +170,10 @@ export function FakeChart({
             </g>
           )
         })}
+        <g className={`chart-active-tip ${windowActive ? 'ready' : ''}`} aria-hidden="true">
+          <circle cx={currentCx} cy={currentCy} r="5.8" />
+          <circle cx={currentCx} cy={currentCy} r="2.5" />
+        </g>
       </svg>
       <div className={`curve-rail ${isDecaying ? 'decaying' : ''}`} aria-label="Bonding curve progress">
         <span className="curve-rail-label">{milestoneLabel}</span>

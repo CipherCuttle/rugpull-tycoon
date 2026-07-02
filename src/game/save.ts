@@ -1,6 +1,6 @@
-import { createInitialChart } from './chart'
+import { createInitialChart, createInitialResistance } from './chart'
 import { getBondingCurveTier } from './economy'
-import type { GameState } from './types'
+import type { GameState, ResistanceState } from './types'
 import { SAVE_VERSION } from './types'
 
 const STORAGE_KEY = 'rugpull-tycoon.basement-launch.v1'
@@ -25,6 +25,14 @@ function looksLikeGameState(value: unknown): value is GameState {
   )
 }
 
+function looksLikeResistance(value: unknown): value is ResistanceState {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return typeof value.id === 'number' && typeof value.price === 'number'
+}
+
 // Saves written before the v0.1 interaction-rebuild fields existed will
 // still pass looksLikeGameState() (the new fields are additive, so the
 // shape check above never required them). This backfills sensible
@@ -39,6 +47,18 @@ function looksLikeGameState(value: unknown): value is GameState {
 // new fields are additive and default cleanly below, so no bump is needed.
 function migrateGameState(value: GameState): GameState {
   const raw = value as Partial<GameState>
+  const chart = raw.chart ?? createInitialChart()
+  const resistance = looksLikeResistance(raw.resistance)
+    ? {
+        ...createInitialResistance(chart.price, raw.resistance.id),
+        price: raw.resistance.price,
+        lastResistanceHitAt: raw.resistance.lastResistanceHitAt ?? 0,
+        breakoutStreak: raw.resistance.breakoutStreak ?? 0,
+        perfectBreakouts: raw.resistance.perfectBreakouts ?? 0,
+        rejections: raw.resistance.rejections ?? 0,
+      }
+    : createInitialResistance(chart.price)
+
   return {
     ...value,
     bondingCurveTier: raw.bondingCurveTier ?? getBondingCurveTier(value.bondingCurveProgress),
@@ -74,7 +94,8 @@ function migrateGameState(value: GameState): GameState {
     // + a chartPoints line) load with a fresh, pre-rolled candle chart; the next
     // tap/tick drives it normally. The stale surfPressure/chartPoints fields are
     // simply ignored.
-    chart: raw.chart ?? createInitialChart(),
+    chart,
+    resistance,
     toast: raw.toast ?? null,
     newCardCount: raw.newCardCount ?? 0,
     streakEffect: raw.streakEffect ?? null,

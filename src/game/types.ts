@@ -85,6 +85,19 @@ export interface EventState {
   hypeBoostTicks: number
 }
 
+export type TapRating = 'perfect' | 'good' | 'weak' | 'rejected' | 'overheated'
+
+export interface ResistanceState {
+  id: number
+  price: number
+  crossedAt: number
+  windowUntil: number
+  lastResistanceHitAt: number
+  breakoutStreak: number
+  perfectBreakouts: number
+  rejections: number
+}
+
 export interface TapEffect {
   id: number
   gain: number
@@ -93,6 +106,8 @@ export interface TapEffect {
   // Optional so older saves that stored a lastTapEffect stay valid (defaults
   // to a non-crit when absent).
   crit?: boolean
+  rating?: TapRating
+  ratingLabel?: string
 }
 
 export interface PurchaseEffect {
@@ -182,6 +197,9 @@ export interface GameState {
   // from the economy — it reacts to taps (velocity impulse), gravity, and
   // overheat, and drives the surf zones off its `price`. See game/chart.ts.
   chart: ChartState
+  // v0.4 Resistance Breakout visual contract. Slice 1/2 only stores and renders
+  // the active target; tap rewards/punishments remain v0.3.5 until the next pass.
+  resistance: ResistanceState
   upgrades: Record<string, number>
   cards: Record<string, number>
   event: EventState

@@ -1381,14 +1381,85 @@ h2 {
   text-shadow: 0 0 14px rgba(255, 194, 58, 0.7);
 }
 
-/* --- v0.3.4 Candlestick chart --- */
-/* The 45–75 Surf-Zone band: a faint green wash marking the sweet spot to ride. */
-.chart-surf-band {
-  fill: rgba(70, 255, 155, 0.05);
+/* --- v0.3.4 Candlestick chart / v0.4 Resistance Breakout target --- */
+.chart-resistance-target {
+  pointer-events: none;
 }
 
-.hero-chart.surf-surf .chart-surf-band {
-  fill: rgba(70, 255, 155, 0.1);
+.chart-resistance-line {
+  stroke-linecap: round;
+}
+
+.chart-resistance-line.halo {
+  stroke: rgba(255, 194, 58, 0.28);
+  stroke-width: 10;
+  filter: drop-shadow(0 0 9px rgba(255, 194, 58, 0.65));
+}
+
+.chart-resistance-line.core {
+  stroke: var(--amber);
+  stroke-width: 2.5;
+  stroke-dasharray: 7 5;
+}
+
+.chart-resistance-label {
+  fill: var(--amber);
+  font-size: 7px;
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  text-anchor: end;
+  text-shadow: 0 0 7px rgba(255, 194, 58, 0.75);
+}
+
+.chart-smash-window {
+  fill: rgba(255, 194, 58, 0.14);
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 1;
+  filter: drop-shadow(0 0 10px rgba(255, 194, 58, 0.55));
+  animation: resistance-pulse 280ms ease-out infinite;
+}
+
+.chart-active-tip circle:first-child {
+  fill: rgba(70, 224, 255, 0.16);
+  stroke: rgba(70, 224, 255, 0.6);
+  stroke-width: 1.25;
+}
+
+.chart-active-tip circle:last-child {
+  fill: var(--cyan);
+  filter: drop-shadow(0 0 8px rgba(70, 224, 255, 0.8));
+}
+
+.chart-active-tip.ready circle:first-child {
+  fill: rgba(255, 194, 58, 0.22);
+  stroke: rgba(255, 194, 58, 0.8);
+  animation: tip-ready-pulse 280ms ease-out infinite;
+}
+
+.chart-active-tip.ready circle:last-child {
+  fill: #fff;
+  filter: drop-shadow(0 0 10px rgba(255, 194, 58, 0.95));
+}
+
+.hero-chart.smash-window {
+  border-color: rgba(255, 194, 58, 0.78);
+  box-shadow: var(--shadow), 0 0 28px rgba(255, 194, 58, 0.26), inset 0 0 24px rgba(255, 194, 58, 0.08);
+}
+
+.hero-chart.resistance-close:not(.smash-window):not(.overheated) {
+  border-color: rgba(70, 224, 255, 0.48);
+}
+
+.hero-chart.breakout-perfect .fake-chart {
+  animation: breakout-flash 220ms ease-out;
+}
+
+.hero-chart.rejected .fake-chart {
+  filter: drop-shadow(0 0 8px rgba(255, 59, 82, 0.55));
+}
+
+.hero-chart.overheated.unstable::after {
+  top: 66px;
 }
 
 /* Overheat state: overmashing washes the machine hot orange and shakes it. */
@@ -2023,6 +2094,41 @@ h2 {
   }
 }
 
+@keyframes resistance-pulse {
+  0% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.62;
+  }
+}
+
+@keyframes tip-ready-pulse {
+  0% {
+    r: 5.8;
+    opacity: 0.8;
+  }
+  100% {
+    r: 8.5;
+    opacity: 0.2;
+  }
+}
+
+@keyframes breakout-flash {
+  0% {
+    filter: drop-shadow(0 0 0 rgba(255, 194, 58, 0));
+  }
+  35% {
+    filter: drop-shadow(0 0 18px rgba(255, 194, 58, 0.85));
+  }
+  100% {
+    filter: drop-shadow(0 0 0 rgba(255, 194, 58, 0));
+  }
+}
+
 @keyframes rail-shine {
   0%,
   70% {
@@ -2238,6 +2344,9 @@ h2 {
   .curve-rail.decaying .curve-rail-fill,
   .chart-gravity-flag.bleeding,
   .chart-overheat-flag,
+  .chart-smash-window,
+  .chart-active-tip.ready circle:first-child,
+  .hero-chart.breakout-perfect .fake-chart,
   .main-action::after,
   .ticker-symbol::before,
   .streak-burst,

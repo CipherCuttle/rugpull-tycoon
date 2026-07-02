@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { classifyTapRating, OVERHEAT } from '../game/chart'
 import {
   getBondingCurveDelta,
   getClickGain,
@@ -40,6 +41,10 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
   const decayPerSec = getDecayRate(state)
   const floor = getTierFloor(state.bondingCurveTier)
   const remaining = Math.max(0, 100 - state.bondingCurveProgress)
+  const now = Date.now()
+  const resistanceDistance = state.resistance.price - state.chart.price
+  const windowMs = Math.max(0, state.resistance.windowUntil - now)
+  const tapPreview = classifyTapRating(state.resistance, state.chart, now, state.chart.heat > OVERHEAT)
   // Estimated time to graduation assuming a steady 3 taps/sec of active play
   // (idle never decays while tapping, so decay is excluded from the active rate).
   // ETA now factors the Candle Chain: curve pressure = base × combo multiplier.
@@ -96,6 +101,13 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
           </div>
           <div>
             chart: {state.chart.price.toFixed(1)} v{state.chart.velocity.toFixed(1)} h{state.chart.heat.toFixed(0)}
+          </div>
+          <div>
+            resistance: {state.resistance.price.toFixed(1)} d{resistanceDistance.toFixed(1)} w{Math.round(windowMs)}ms
+          </div>
+          <div>
+            rating preview: {tapPreview} · streak {state.resistance.breakoutStreak} · perfect{' '}
+            {state.resistance.perfectBreakouts} · rejected {state.resistance.rejections}
           </div>
           <div>ETA @3tps·x2: {Number.isFinite(etaSeconds) ? `${etaSeconds}s` : '—'}</div>
           <div>taps (run): {state.taps}</div>
