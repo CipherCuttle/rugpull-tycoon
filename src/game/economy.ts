@@ -2,8 +2,28 @@ import { CARDS } from '../data/cards'
 import { getUpgrade, UPGRADES } from '../data/upgrades'
 import type { GameState } from './types'
 
-export const BONDING_CURVE_TARGET_LIQUIDITY = 2600
+export const BONDING_CURVE_TARGET_LIQUIDITY = 1000
 export const COPE_CRATE_COST = 4
+
+export function getBondingCurveTier(progress: number): number {
+  if (progress >= 100) {
+    return 4
+  }
+
+  if (progress >= 75) {
+    return 3
+  }
+
+  if (progress >= 50) {
+    return 2
+  }
+
+  if (progress >= 25) {
+    return 1
+  }
+
+  return 0
+}
 
 export function getUpgradeLevel(state: GameState, upgradeId: string) {
   return state.upgrades[upgradeId] ?? 0

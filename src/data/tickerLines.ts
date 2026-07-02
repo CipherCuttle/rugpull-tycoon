@@ -52,3 +52,17 @@ export const EVENT_LINES = [
   'Event reward paid. Please pretend this was governance.',
   'Checklist updated. Confidence remains fictional.',
 ]
+
+export const MICRO_LINES = [
+  'gravity clocked out',
+  'jeets alerted',
+  'chart escaped containment',
+  'someone bought the top',
+]
+
+export const MILESTONE_LINES: Record<number, string> = {
+  1: '25% — Jeets noticed. This is either bullish or terminal.',
+  2: '50% — KOLs circling. Hide the good snacks.',
+  3: '75% — Gravity unstable. Chart may remember physics.',
+  4: '100% — Graduation unlocked. Crime scene pending.',
+}

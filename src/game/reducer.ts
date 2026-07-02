@@ -7,6 +7,8 @@ import {
   EVENT_LINES,
   JEET_LINES,
   LAUNCH_LINES,
+  MICRO_LINES,
+  MILESTONE_LINES,
   PRESTIGE_LINES,
   TAP_LINES,
   UPGRADE_LINES,
@@ -15,6 +17,7 @@ import { UPGRADES } from '../data/upgrades'
 import {
   COPE_CRATE_COST,
   getBondingCurveDelta,
+  getBondingCurveTier,
   getCardUnlockChance,
   getClickGain,
   getHeatGain,
@@ -71,6 +74,7 @@ export function createInitialGame(): GameState {
     resources: initialResources(),
     currentCoin: { ...STARTER_COIN },
     bondingCurveProgress: 0,
+    bondingCurveTier: 0,
     upgrades: initialUpgrades(),
     cards: initialCards(),
     event: {
@@ -90,6 +94,12 @@ export function createInitialGame(): GameState {
     totalLiquidityEarned: 0,
     jeetEventsSurvived: 0,
     copeCratesOpened: 0,
+    onboardingComplete: false,
+    lastTapEffect: null,
+    lastPurchaseEffect: null,
+    pendingCardReveal: null,
+    majorEvent: null,
+    effectSeq: 0,
   }
 }
 
@@ -120,6 +130,42 @@ function updateChart(state: GameState, delta: number): GameState {
   }
 }
 
+// Recomputes the bonding-curve tier and, if a tier boundary was crossed,
+// stamps a fresh `majorEvent` (and ticker line) for each tier crossed.
+// This is the single hook point for "anywhere bondingCurveProgress changes"
+// (SEND_CANDLE, TICK, and event rewards all flow through awardLiquidity).
+function applyMilestoneCrossing(state: GameState): GameState {
+  const tier = getBondingCurveTier(state.bondingCurveProgress)
+
+  if (tier <= state.bondingCurveTier) {
+    return state
+  }
+
+  let next = state
+  let seq = state.effectSeq
+
+  for (let crossedTier = state.bondingCurveTier + 1; crossedTier <= tier; crossedTier += 1) {
+    const line = MILESTONE_LINES[crossedTier]
+
+    if (!line) {
+      continue
+    }
+
+    seq += 1
+    next = addTicker(
+      {
+        ...next,
+        bondingCurveTier: crossedTier,
+        effectSeq: seq,
+        majorEvent: { id: seq, line },
+      },
+      line,
+    )
+  }
+
+  return { ...next, bondingCurveTier: tier }
+}
+
 function awardLiquidity(state: GameState, amount: number, chartDelta = 2): GameState {
   if (amount <= 0) {
     return state
@@ -135,7 +181,7 @@ function awardLiquidity(state: GameState, amount: number, chartDelta = 2): GameS
     bondingCurveProgress: Math.min(100, state.bondingCurveProgress + getBondingCurveDelta(state, amount)),
   }
 
-  return updateChart(next, chartDelta)
+  return applyMilestoneCrossing(updateChart(next, chartDelta))
 }
 
 function unlockCard(state: GameState, seed: number): GameState {
@@ -148,6 +194,7 @@ function unlockCard(state: GameState, seed: number): GameState {
 
   const existingCopies = state.cards[cardId] ?? 0
   const isDuplicate = existingCopies > 0
+  const seq = state.effectSeq + 1
   const next: GameState = {
     ...state,
     cards: {
@@ -159,6 +206,8 @@ function unlockCard(state: GameState, seed: number): GameState {
       copium: state.resources.copium + (isDuplicate ? 1 : 0),
       receipts: state.resources.receipts + (isDuplicate ? 0 : 1),
     },
+    effectSeq: seq,
+    pendingCardReveal: { id: seq, cardId, isDuplicate },
   }
 
   return addTicker(
@@ -302,17 +351,28 @@ function sendCandle(state: GameState): GameState {
     return launchCoin(state)
   }
 
+  const tapId = state.taps + 1
+  const gain = getClickGain(state)
+
   let next: GameState = {
     ...state,
-    taps: state.taps + 1,
+    taps: tapId,
     resources: {
       ...state.resources,
       heat: state.resources.heat + getHeatGain(state),
     },
   }
 
-  next = awardLiquidity(next, getClickGain(state), 4)
+  next = awardLiquidity(next, gain, 4)
   next = addTicker(next, pickLine(TAP_LINES, next.taps))
+
+  const microRoll = deterministicRoll(tapId * 7.13 + state.prestigeCount * 3.01)
+  const microLine = microRoll < 0.15 ? pickLine(MICRO_LINES, tapId) : null
+
+  next = {
+    ...next,
+    lastTapEffect: { id: tapId, gain, microLine },
+  }
 
   if (next.taps % 12 === 0) {
     const loss = Math.floor(next.resources.liquidity * getJeetLossRatio(next))
@@ -342,6 +402,8 @@ function buyUpgrade(state: GameState, upgradeId: string): GameState {
   }
 
   const level = state.upgrades[upgradeId] ?? 0
+  const newLevel = level + 1
+  const seq = state.effectSeq + 1
   const next: GameState = {
     ...state,
     resources: {
@@ -352,8 +414,10 @@ function buyUpgrade(state: GameState, upgradeId: string): GameState {
     },
     upgrades: {
       ...state.upgrades,
-      [upgradeId]: level + 1,
+      [upgradeId]: newLevel,
     },
+    effectSeq: seq,
+    lastPurchaseEffect: { id: seq, upgradeId, level: newLevel },
   }
 
   return syncEvent(addTicker(next, pickLine(UPGRADE_LINES, level + cost)))
@@ -394,6 +458,13 @@ function graduateCoin(state: GameState): GameState {
     hypeBoostTicks: 0,
   }
 
+  // createInitialGame() already resets bondingCurveTier/lastTapEffect/
+  // lastPurchaseEffect/pendingCardReveal/effectSeq to their fresh-run
+  // defaults (0/null/null/null/0) — only the graduation majorEvent itself
+  // needs to be stamped explicitly below.
+  const seq = 1
+  const graduationLine = `${state.currentCoin.ticker} GRADUATED DIRECTLY INTO A CRIME SCENE`
+
   const next: GameState = {
     ...createInitialGame(),
     resources: {
@@ -416,6 +487,9 @@ function graduateCoin(state: GameState): GameState {
       ...state.tickerHistory,
     ].slice(0, MAX_TICKER_LINES),
     lastOutcome: outcome,
+    onboardingComplete: state.onboardingComplete,
+    effectSeq: seq,
+    majorEvent: { id: seq, line: graduationLine },
   }
 
   return syncEvent(next)
@@ -462,6 +536,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return graduateCoin(state)
     case 'TICK':
       return runTick(state)
+    case 'COMPLETE_ONBOARDING':
+      return { ...state, onboardingComplete: true }
+    case 'RESET_SAVE':
+      return createInitialGame()
     default:
       return state
   }

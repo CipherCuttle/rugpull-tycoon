@@ -81,11 +81,35 @@ export interface EventState {
   hypeBoostTicks: number
 }
 
+export interface TapEffect {
+  id: number
+  gain: number
+  microLine: string | null
+}
+
+export interface PurchaseEffect {
+  id: number
+  upgradeId: string
+  level: number
+}
+
+export interface CardRevealEffect {
+  id: number
+  cardId: string
+  isDuplicate: boolean
+}
+
+export interface MajorEvent {
+  id: number
+  line: string
+}
+
 export interface GameState {
   saveVersion: number
   resources: ResourceState
   currentCoin: CoinState
   bondingCurveProgress: number
+  bondingCurveTier: number
   upgrades: Record<string, number>
   cards: Record<string, number>
   event: EventState
@@ -97,6 +121,12 @@ export interface GameState {
   totalLiquidityEarned: number
   jeetEventsSurvived: number
   copeCratesOpened: number
+  onboardingComplete: boolean
+  lastTapEffect: TapEffect | null
+  lastPurchaseEffect: PurchaseEffect | null
+  pendingCardReveal: CardRevealEffect | null
+  majorEvent: MajorEvent | null
+  effectSeq: number
   lastOutcome?: string
   lastSavedAt?: number
 }
@@ -108,3 +138,5 @@ export type GameAction =
   | { type: 'OPEN_COPE_CRATE' }
   | { type: 'GRADUATE_COIN' }
   | { type: 'TICK'; now: number }
+  | { type: 'COMPLETE_ONBOARDING' }
+  | { type: 'RESET_SAVE' }
