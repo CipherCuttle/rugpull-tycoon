@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { OVERHEAT, type Candle, type ChartState } from '../game/chart'
 import { getSurfZone, getTierFloor } from '../game/economy'
-import type { ResistanceState, TapEffect } from '../game/types'
+import type { FountainEvent, ResistanceState, TapEffect } from '../game/types'
+import { StreakFountain } from './StreakFountain'
 
 interface FakeChartProps {
   chart: ChartState
@@ -14,6 +15,10 @@ interface FakeChartProps {
   // v0.3.5: streak-mastery aura states (visual only).
   supercharged: boolean
   overdrive: boolean
+  // v0.4B: hosted here (rather than as a viewport-fixed sibling in HomeScreen) so
+  // its lanes are positioned relative to the chart panel's own box and can never
+  // drift over the resistance line/Smash Window.
+  fountainEvents: FountainEvent[]
 }
 
 const TAP_FLASH_MS = 220
@@ -37,6 +42,7 @@ export function FakeChart({
   isDecaying,
   supercharged,
   overdrive,
+  fountainEvents,
 }: FakeChartProps) {
   const clamped = Math.max(0, Math.min(100, progress))
 
@@ -222,6 +228,7 @@ export function FakeChart({
         <strong className="curve-rail-value">{clamped.toFixed(1)}%</strong>
       </div>
       <p className="safety-line">Fictional arcade chart. No market data, no trading signal.</p>
+      <StreakFountain events={fountainEvents} />
     </section>
   )
 }

@@ -1,7 +1,7 @@
 import { CARDS } from '../data/cards'
 import { getUpgrade, UPGRADES } from '../data/upgrades'
 import { CHART_TAP_IMPULSE_BASE } from './chart'
-import type { GameState } from './types'
+import type { GameState, TapRating } from './types'
 
 // v0.3.1 Economy Tuning: the amount of *curve-driving* Liquidity needed to fill
 // the bonding curve from 0→100%. Raised 13× from v0.3 (was 1000) so a full
@@ -375,4 +375,68 @@ export function getChartJeetDump(state: GameState): number {
 export function getChartAutoImpulse(state: GameState): number {
   const passive = getPassiveGainPerSecond(state)
   return passive > 0 ? Math.min(passive * 0.05, 6) : 0
+}
+
+// --- v0.4B Focus + Spam Punishment: tap-timing reward/heat/impulse shaping ---
+// `classifyTapRating` (chart.ts) already scores a tap against the live resistance
+// target the instant BEFORE its own impulse lands — perfect/good read as "you
+// timed this", weak/rejected/overheated read as "you didn't". These three scales
+// turn that read into the actual incentive: precise taps pay more and cook less,
+// spam taps pay less and cook more. `null` (Overdrive bypasses classification
+// entirely — see reducer.ts) always means "no penalty, no bonus", preserving
+// Overdrive's "mash without consequences" contract.
+export function getTapRatingRewardScale(rating: TapRating | null): number {
+  switch (rating) {
+    case 'perfect':
+      return 1.2
+    case 'good':
+      return 1.0
+    case 'weak':
+      return 0.6
+    case 'rejected':
+      return 0.25
+    case 'overheated':
+      // Zero: a tap thrown while TOO HOT should read as "this did nothing" for
+      // wallet/curve progress, not just "did less" — the headless sim (see
+      // memory) showed a milder penalty here still let raw spam volume
+      // out-graduate timed play. walletGain still floors at 1 in the reducer so
+      // the tap never feels like a dead input, just an unrewarded one.
+      return 0
+    default:
+      return 1.0
+  }
+}
+
+export function getTapRatingHeatScale(rating: TapRating | null): number {
+  switch (rating) {
+    case 'perfect':
+      return 0.75
+    case 'good':
+      return 1.0
+    case 'weak':
+      return 1.3
+    case 'rejected':
+      return 1.7
+    case 'overheated':
+      return 2.0
+    default:
+      return 1.0
+  }
+}
+
+export function getTapRatingImpulseScale(rating: TapRating | null): number {
+  switch (rating) {
+    case 'perfect':
+      return 1.1
+    case 'good':
+      return 1.0
+    case 'weak':
+      return 0.65
+    case 'rejected':
+      return 0.4
+    case 'overheated':
+      return 0.2
+    default:
+      return 1.0
+  }
 }

@@ -41,6 +41,9 @@ import {
   getJeetLossRatio,
   getPassiveGainPerSecond,
   getPrestigeReward,
+  getTapRatingHeatScale,
+  getTapRatingImpulseScale,
+  getTapRatingRewardScale,
   getTierFloor,
   getTotalUpgradeLevels,
   getUpgradeCost,
@@ -59,6 +62,7 @@ import {
 import {
   advanceChart,
   advanceResistance,
+  classifyTapRating,
   createInitialChart,
   createInitialResistance,
   resolveBreakoutTap,
@@ -67,6 +71,7 @@ import {
   OVERHEAT,
   RESISTANCE_BROKEN_HOLD_MS,
   RESISTANCE_OVERHEAT_HOLD_MS,
+  RESISTANCE_OVERHEAT_RECOVERY_SCALE,
   RESISTANCE_REJECTED_HOLD_MS,
 } from './chart'
 import type { EventProgress, FountainKind, GameAction, GameState, ResourceState, TapRating, ToastKind } from './types'
@@ -530,6 +535,13 @@ function launchCoin(state: GameState): GameState {
 // 2–4 min graduation pacing (verified via the headless sim).
 const BREAKOUT_CURVE_BONUS_PERFECT = 0.7
 const BREAKOUT_CURVE_BONUS_GOOD = 0.35
+// v0.4B: BREAKOUT should visibly do something beyond a combat-text burst — a
+// direct Supercharge nudge (on top of the chain it keeps alive) plus a compact
+// reward readout (see TapEffect.breakoutReward) rendered next to the button.
+const BREAKOUT_SUPERCHARGE_GAIN_PERFECT = 10
+const BREAKOUT_SUPERCHARGE_GAIN_GOOD = 5
+
+type BreakoutReward = { chain: number; superchargeGain: number; curvePercent: number }
 
 // v0.4A Resistance Breakout. Read AFTER the tap's chart impulse has landed and
 // classify what it did to the line, then stamp the matching arcade event beat
@@ -540,7 +552,7 @@ function resolveResistanceTap(
   now: number,
   walletGain: number,
   isOverdrive: boolean,
-): { next: GameState; rating: TapRating | null } {
+): { next: GameState; rating: TapRating | null; breakoutReward: BreakoutReward | null } {
   const overheated = state.chart.heat > OVERHEAT && !isOverdrive
   const outcome = resolveBreakoutTap(state.resistance, state.chart, now, overheated)
 
@@ -566,18 +578,28 @@ function resolveResistanceTap(
     // is already frozen ('broken'), so this extra step won't reopen a window.
     next = advanceChartState(next, CHART_TAP_STEP, { impulse: perfect ? 9 : 6.5, frictionScale: 0.7 }, now)
     const bonusCurve = walletGain * (perfect ? BREAKOUT_CURVE_BONUS_PERFECT : BREAKOUT_CURVE_BONUS_GOOD)
+    const curvePercent = getBondingCurveDelta(next, bonusCurve)
     next = awardLiquidity(next, 0, bonusCurve)
+    const superchargeGain = perfect ? BREAKOUT_SUPERCHARGE_GAIN_PERFECT : BREAKOUT_SUPERCHARGE_GAIN_GOOD
+    next = { ...next, supercharge: Math.min(SUPERCHARGE_MAX, next.supercharge + superchargeGain) }
     next = pushFountain(next, perfect ? 'BREAKOUT PERFECT' : 'GOOD BREAKOUT', 'breakout')
     if (streak >= 2) {
       next = pushFountain(next, `CHAIN ×${streak}`, 'chain')
     }
-    return { next, rating: perfect ? 'perfect' : 'good' }
+    return {
+      next,
+      rating: perfect ? 'perfect' : 'good',
+      breakoutReward: { chain: streak, superchargeGain, curvePercent },
+    }
   }
 
   if (outcome === 'overheated') {
     // Overmash: purely a "let it breathe" scold. The chart's own overheat reversal
     // physics already punish the price, so we do NOT also nuke the Candle Chain
-    // here — that would trap a fast masher in a permanent penalty loop.
+    // here — that would trap a fast masher in a permanent penalty loop. This only
+    // fires on the tap that *first* trips TOO HOT — resolveBreakoutTap freezes
+    // repeat taps while the hold is already active (chart.ts), so the scold and
+    // its combat text can't spam every tap.
     let next: GameState = {
       ...state,
       resistance: {
@@ -590,7 +612,7 @@ function resolveResistanceTap(
       },
     }
     next = pushFountain(next, 'TOO HOT', 'reject')
-    return { next, rating: 'overheated' }
+    return { next, rating: 'overheated', breakoutReward: null }
   }
 
   if (outcome === 'rejected') {
@@ -616,12 +638,12 @@ function resolveResistanceTap(
     }
     next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: 14 }, now)
     next = pushFountain(next, 'REJECTED', 'reject')
-    return { next, rating: 'rejected' }
+    return { next, rating: 'rejected', breakoutReward: null }
   }
 
   // 'weak' (building momentum below the line) / 'none' (mid event beat): no penalty
   // and no combat text — the button already reads BUILD MOMENTUM here.
-  return { next: state, rating: outcome === 'weak' ? 'weak' : null }
+  return { next: state, rating: outcome === 'weak' ? 'weak' : null, breakoutReward: null }
 }
 
 function sendCandle(state: GameState, now: number): GameState {
@@ -656,12 +678,27 @@ function sendCandle(state: GameState, now: number): GameState {
   // window), on top of the decay-rescue and combo bonuses.
   const critChance = (wasDecaying ? 0.18 : 0.12) + comboCritBonus + (isOverdrive ? OVERDRIVE_CRIT_BONUS : 0)
   const isCrit = deterministicRoll(tapId * 2.71 + state.prestigeCount * 3.77) < critChance
+
+  // v0.4B Focus + Spam Punishment: read against the PRE-tap resistance/chart state
+  // (before this tap's own impulse moves anything) so the rating reflects timing,
+  // not the tap's own effect. Overdrive bypasses this entirely — mashing there
+  // stays consequence-free, per its existing contract.
+  const preTapOverheated = state.chart.heat > OVERHEAT && !isOverdrive
+  const tapRating = isOverdrive ? null : classifyTapRating(state.resistance, state.chart, now, preTapOverheated)
+  const rewardScale = getTapRatingRewardScale(tapRating)
+  const heatRatingScale = getTapRatingHeatScale(tapRating)
+  const impulseRatingScale = getTapRatingImpulseScale(tapRating)
+
   // Wallet gain (economy) is combo-independent — only crit scales it. Curve
   // pressure gets the full combo multiplier, so the chain surfs the chart faster
   // without inflating upgrade income. v0.3.5: Overdrive adds a modest curve boost
   // — enough to reward mastery, small enough to keep the 2–4 min pacing intact.
-  const walletGain = isCrit ? baseGain * 3 : baseGain
-  const curveGain = walletGain * comboMultiplier * (isOverdrive ? OVERDRIVE_CURVE_BONUS : 1)
+  // v0.4B: both are then scaled by tap timing — a spammed tap far from the line
+  // (or thrown away while overheated) clearly produces less progress than a
+  // timed one, without ever zeroing it out entirely.
+  const rawWalletGain = isCrit ? baseGain * 3 : baseGain
+  const walletGain = Math.max(1, Math.round(rawWalletGain * rewardScale))
+  const curveGain = rawWalletGain * comboMultiplier * (isOverdrive ? OVERDRIVE_CURVE_BONUS : 1) * rewardScale
 
   let next: GameState = {
     ...state,
@@ -683,15 +720,17 @@ function sendCandle(state: GameState, now: number): GameState {
   // visibly reacts to this tap; the 120ms game tick keeps it alive between taps.
   // v0.3.5: streak-mastery states make the tap punchier and safer. Supercharge
   // hits harder and cooks slower; Overdrive hits harder still and cannot overheat.
+  // v0.4B: rating scales impulse (bad taps push weaker) and heat-add (bad taps
+  // cook the chart harder), on top of the existing Supercharge/Overdrive scales.
   const impulseScale = isOverdrive ? OVERDRIVE_IMPULSE_SCALE : isSupercharged ? SUPERCHARGE_IMPULSE_SCALE : 1
   const heatScale = isOverdrive ? 0 : isSupercharged ? SUPERCHARGE_HEAT_SCALE : 1
-  const tapImpulse = getChartTapImpulse(next, comboMultiplier, isCrit) * impulseScale
+  const tapImpulse = getChartTapImpulse(next, comboMultiplier, isCrit) * impulseScale * impulseRatingScale
   next = advanceChartState(
     next,
     CHART_TAP_STEP,
     {
       impulse: tapImpulse,
-      heatAdd: CHART_HEAT_PER_TAP + (isCrit ? 4 : 0),
+      heatAdd: (CHART_HEAT_PER_TAP + (isCrit ? 4 : 0)) * heatRatingScale,
       heatScale,
       noReversal: isOverdrive,
       frictionScale: getChartFrictionScale(comboMultiplier),
@@ -713,23 +752,46 @@ function sendCandle(state: GameState, now: number): GameState {
     next = addTicker(next, pickLine(TAP_LINES, tapId))
   }
 
+  // v0.4B: a tap thrown at an already-live TOO HOT/REJECTED hold (pre-tap phase,
+  // so this catches every repeat tap during the freeze, not just the one that
+  // triggered it) reads as a "fizzle" — small, unmistakably worse, no loud combat
+  // text (that already fired once on the tap that tripped the hold).
+  const repeatedPunishmentTap = state.resistance.phase === 'overheated' || state.resistance.phase === 'rejected'
   const microRoll = deterministicRoll(tapId * 7.13 + state.prestigeCount * 3.01)
-  const microLine = isCrit ? 'CRITICAL CANDLE' : microRoll < 0.12 ? pickLine(MICRO_LINES, tapId) : null
+  const microLine = repeatedPunishmentTap
+    ? state.resistance.phase === 'overheated'
+      ? 'FIZZLE — LET IT BREATHE'
+      : 'FIZZLE — MISTIMED'
+    : isCrit
+      ? 'CRITICAL CANDLE'
+      : microRoll < 0.12
+        ? pickLine(MICRO_LINES, tapId)
+        : null
 
   next = {
     ...next,
-    lastTapEffect: { id: tapId, gain: walletGain, microLine, crit: isCrit, rating: resistanceResult.rating ?? undefined },
+    lastTapEffect: {
+      id: tapId,
+      gain: walletGain,
+      microLine,
+      crit: isCrit,
+      rating: resistanceResult.rating ?? undefined,
+      breakoutReward: resistanceResult.breakoutReward,
+    },
   }
 
   next = stampStreakReward(next, combo)
 
-  // v0.3.5 fountain combat text. Crits are the loud moment (two bursts); a light
-  // "CHAIN N" burst every 15th link keeps the between-milestone stretches alive.
-  // Kept sparse on purpose — the component also caps particles as a backstop.
-  if (isCrit) {
+  // v0.3.5 fountain combat text. v0.4B: minor filler (crit sparkle, chain-length
+  // ticks) is reserved for the calm 'waiting' phase — once the player is actively
+  // engaging a resistance target (approaching/smash/broken/rejected/overheated)
+  // the loud breakout/reject text already owns the chart, so filler is suppressed
+  // instead of stacking on top of it. The "+N Liquidity" burst was dropped
+  // entirely — the button's own tap-float already shows that number per tap.
+  const showMinorFountain = state.resistance.phase === 'waiting'
+  if (isCrit && showMinorFountain) {
     next = pushFountain(next, 'CRIT CANDLE', 'crit')
-    next = pushFountain(next, `+${walletGain} Liquidity`, 'gain')
-  } else if (combo >= SUPERCHARGE_CHAIN_MIN && combo % 15 === 0 && !STREAK_REWARDS[combo]) {
+  } else if (!isCrit && showMinorFountain && combo >= SUPERCHARGE_CHAIN_MIN && combo % 15 === 0 && !STREAK_REWARDS[combo]) {
     next = pushFountain(next, `CHAIN ${combo}`, 'chain')
   }
 
@@ -885,6 +947,11 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
   // trigger a reversal either, or a fast masher's gaps would still punish them.
   const overdriveActive = getIsOverdrive(state.overdriveUntil, now)
   const prevPhase = state.resistance.phase
+  // v0.4B: while the target is mid-TOO-HOT-scold, idle ticks bleed heat faster —
+  // a player who actually stops tapping recovers visibly quicker than one who
+  // keeps mashing through the hold (mashing keeps injecting its own heat via the
+  // tap path, which this idle-only boost never touches).
+  const recoveringFromOverheat = prevPhase === 'overheated'
   const base: GameState = advanceChartState(
     { ...state, idleTicks },
     dtSeconds,
@@ -893,6 +960,7 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
       autoImpulse: getChartAutoImpulse(state),
       heatScale: overdriveActive ? 0 : 1,
       noReversal: overdriveActive,
+      heatDecayScale: recoveringFromOverheat ? RESISTANCE_OVERHEAT_RECOVERY_SCALE : 1,
     },
     now,
   )

@@ -124,6 +124,9 @@ export interface TapEffect {
   crit?: boolean
   rating?: TapRating
   ratingLabel?: string
+  // v0.4B: set only on a breakout tap, so the button can show a compact,
+  // concrete "what just happened" readout instead of just a combat-text burst.
+  breakoutReward?: { chain: number; superchargeGain: number; curvePercent: number } | null
 }
 
 export interface PurchaseEffect {

@@ -111,6 +111,12 @@ export const RESISTANCE_STALE_ABOVE_MS = 700
 // The chart crashing this far below the line respawns a nearer target instead of
 // waiting for the slow drift to catch up.
 export const RESISTANCE_FAR_BELOW = 34
+// v0.4B Focus + Spam Punishment: while the resistance target is holding its
+// 'overheated' beat (the TOO HOT scold window), idle ticks bleed chart heat this
+// much faster so a player who actually stops tapping recovers visibly quicker
+// than one who keeps mashing through it. Only applied by the idle TICK path, not
+// the tap path, so mashing through the window never benefits from it.
+export const RESISTANCE_OVERHEAT_RECOVERY_SCALE = 1.6
 
 function roll(seed: number): number {
   const value = Math.sin(seed * 127.11) * 43758.5453
@@ -290,8 +296,12 @@ export function resolveBreakoutTap(
   now: number,
   overheated: boolean,
 ): BreakoutOutcome {
-  // A frozen event beat already resolved this cycle — a tap mid-shatter is a no-op.
-  if (resistance.phase === 'broken' || resistance.phase === 'rejected') {
+  // A frozen event beat already resolved this cycle — a tap mid-shatter (or
+  // mid-scold) is a no-op. v0.4B: 'overheated' joins this freeze so mashing
+  // through the TOO HOT hold can't re-trigger the scold (and its combat text)
+  // on every single tap — the reward/heat penalty for those repeat taps is
+  // handled separately via the pre-tap rating scale in the reducer.
+  if (resistance.phase === 'broken' || resistance.phase === 'rejected' || resistance.phase === 'overheated') {
     return 'none'
   }
 
@@ -341,6 +351,11 @@ export interface ChartAdvanceOpts {
   // the chart can be pinned high and hot without dumping. Heat still decays
   // normally, so it drains back to safe by the time Overdrive ends.
   noReversal?: boolean
+  // v0.4B: >1 speeds up heat decay this step (used by the idle TICK path while
+  // the resistance target holds its 'overheated' beat, so pausing during TOO HOT
+  // visibly recovers faster than mashing through it). Never applied to the
+  // one-off tap heatAdd itself, only the ongoing decay term.
+  heatDecayScale?: number
 }
 
 // Largest stable integration step. friction × dt must stay < 1, and we want
@@ -372,6 +387,7 @@ export function advanceChart(chart: ChartState, dt: number, opts: ChartAdvanceOp
               autoImpulse: opts.autoImpulse,
               heatScale: opts.heatScale,
               noReversal: opts.noReversal,
+              heatDecayScale: opts.heatDecayScale,
             },
       )
       remaining -= step
@@ -393,8 +409,10 @@ export function advanceChart(chart: ChartState, dt: number, opts: ChartAdvanceOp
 
   // Heat: decay, per-tap add, and a top-up while pinned high. heatScale (<1 while
   // Supercharged, 0 during Overdrive) throttles the *gains* but never the decay,
-  // so a hot chart always cools back down on its own.
-  heat = Math.max(0, heat - HEAT_DECAY * dt + (opts.heatAdd ?? 0) * heatScale)
+  // so a hot chart always cools back down on its own. heatDecayScale (v0.4B)
+  // can speed the decay term up further (idle recovery during a TOO HOT hold).
+  const heatDecayScale = opts.heatDecayScale ?? 1
+  heat = Math.max(0, heat - HEAT_DECAY * heatDecayScale * dt + (opts.heatAdd ?? 0) * heatScale)
   if (price > 84) {
     heat += HIGH_HEAT_GAIN * dt * heatScale
   }

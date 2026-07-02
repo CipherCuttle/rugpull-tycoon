@@ -33,9 +33,21 @@ function chainTierClass(multiplier: number): string {
   return ''
 }
 
+// v0.4B: how long the Supercharge-rail swaps to the BREAKOUT reward readout —
+// its own (longer) window, separate from the CSS box-shadow pulse (480ms). The
+// rail has a stable dedicated slot below the button, so the reward reads there
+// instead of stacking another line into tap-float, which already carries
+// gain/chain/micro text directly over the button's own big label.
+const SUPERCHARGE_PULSE_MS = 480
+const BREAKOUT_REWARD_TEXT_MS = 1500
+
 export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: MainActionButtonProps) {
   const [pulsing, setPulsing] = useState(false)
   const [recovering, setRecovering] = useState(false)
+  const [superchargePulse, setSuperchargePulse] = useState(false)
+  const [breakoutReward, setBreakoutReward] = useState<{ chain: number; superchargeGain: number; curvePercent: number } | null>(
+    null,
+  )
   const lastTapId = useRef<number | null>(null)
   const wasDecaying = useRef(false)
 
@@ -56,6 +68,27 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
     const timeout = window.setTimeout(() => setPulsing(false), PULSE_MS)
 
     return () => window.clearTimeout(timeout)
+  }, [state.lastTapEffect])
+
+  // v0.4B: BREAKOUT should visibly do something — pulse the Supercharge meter
+  // (it's already been nudged numerically by the reducer) and swap its label to
+  // a concrete "what just happened" readout, instead of leaving that gain silent.
+  useEffect(() => {
+    const reward = state.lastTapEffect?.breakoutReward
+
+    if (!reward) {
+      return
+    }
+
+    setSuperchargePulse(true)
+    setBreakoutReward(reward)
+    const pulseTimeout = window.setTimeout(() => setSuperchargePulse(false), SUPERCHARGE_PULSE_MS)
+    const textTimeout = window.setTimeout(() => setBreakoutReward(null), BREAKOUT_REWARD_TEXT_MS)
+
+    return () => {
+      window.clearTimeout(pulseTimeout)
+      window.clearTimeout(textTimeout)
+    }
   }, [state.lastTapEffect])
 
   // v0.3: brief green "recovering" flash the moment an active decay is broken.
@@ -206,7 +239,9 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
 
       {launched && !graduateReady ? (
         <div
-          className={`supercharge-rail ${supercharged ? 'full' : ''} ${overdrive ? 'overdrive' : ''}`}
+          className={`supercharge-rail ${supercharged ? 'full' : ''} ${overdrive ? 'overdrive' : ''} ${
+            superchargePulse ? 'breakout-pulse' : ''
+          }`}
           aria-label={overdrive ? 'Overdrive countdown' : 'Supercharge meter'}
         >
           {overdrive ? (
@@ -216,6 +251,16 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
                 <div className="supercharge-fill overdrive-countdown" style={{ width: `${overdrivePct}%` }} />
               </div>
               <strong className="supercharge-value">{overdriveSeconds}s</strong>
+            </>
+          ) : breakoutReward ? (
+            <>
+              <span className="supercharge-label breakout">
+                BREAKOUT +{breakoutReward.superchargeGain}⚡ · +{breakoutReward.curvePercent.toFixed(2)}% CURVE
+              </span>
+              <div className="supercharge-track">
+                <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />
+              </div>
+              <strong className="supercharge-value">{superchargePct}%</strong>
             </>
           ) : (
             <>
