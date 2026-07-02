@@ -7,7 +7,6 @@ import { MainActionButton } from '../components/MainActionButton'
 import { PrestigeModal } from '../components/PrestigeModal'
 import { ResourceBar } from '../components/ResourceBar'
 import { StreakBurst } from '../components/StreakBurst'
-import { StreakFountain } from '../components/StreakFountain'
 import { TickerFeed } from '../components/TickerFeed'
 import { ToastHost } from '../components/ToastHost'
 import { UpgradeList } from '../components/UpgradeList'
@@ -44,6 +43,11 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
   // epoch; the ~120ms game tick re-renders HomeScreen so these stay current.
   const overdrive = state.overdriveUntil > Date.now()
   const supercharged = !overdrive && state.supercharge >= 100
+
+  // v0.4B: while a resistance sequence or hot Candle Chain is actively live, the
+  // player's whole focus should be the chart/button — dim (not disable) the
+  // secondary drawer area so it stops competing for attention mid-tap.
+  const activePlay = state.currentCoin.launched && (state.resistance.phase !== 'waiting' || state.combo >= 5)
 
   function openDrawer(next: Drawer) {
     setDrawer(next)
@@ -89,9 +93,9 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         isDecaying={state.isDecaying}
         supercharged={supercharged}
         overdrive={overdrive}
+        fountainEvents={state.fountainEvents}
       />
       <StreakBurst effect={state.streakEffect} />
-      <StreakFountain events={state.fountainEvents} />
 
       {/* 3. MAIN ACTION AREA */}
       <MainActionButton
@@ -105,7 +109,7 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
       <p className="objective-line">{objective}</p>
 
       {/* 5. SECONDARY AREAS: existing drawer-tabs, de-emphasized */}
-      <section className="secondary-area">
+      <section className={`secondary-area ${activePlay ? 'focus-dim' : ''}`}>
         <div className="secondary-resources" aria-label="Secondary resources">
           <span>Copium {formatNumber(state.resources.copium)}</span>
           <span>Receipts {formatNumber(state.resources.receipts)}</span>

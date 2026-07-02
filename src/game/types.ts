@@ -124,6 +124,12 @@ export interface TapEffect {
   crit?: boolean
   rating?: TapRating
   ratingLabel?: string
+  // v0.4B: set only on a breakout tap, so the button can show a compact,
+  // concrete "what just happened" readout instead of just a combat-text burst.
+  breakoutReward?: { chain: number; superchargeGain: number; curvePercent: number } | null
+  // v0.4C: set on a rejected/overheated tap so the Supercharge rail can explain
+  // *why* the meter didn't move (or dropped) instead of just sitting there.
+  superchargeNote?: { text: string; kind: 'loss' | 'blocked' } | null
 }
 
 export interface PurchaseEffect {
@@ -157,7 +163,6 @@ export interface StreakEffect {
 export type FountainKind =
   | 'gain'
   | 'crit'
-  | 'chain'
   | 'milestone'
   | 'supercharge'
   | 'overdrive'
@@ -214,6 +219,13 @@ export interface GameState {
   supercharge: number
   superchargeFullMs: number
   overdriveUntil: number
+  // v0.4C Overdrive Quality Gate. Tracks recent breakout *quality*, separate from
+  // the Supercharge number itself: perfect/good breakouts raise it, rejected/
+  // overheated taps and slow passive decay bring it back down. Overdrive can only
+  // arm once this clears BREAKOUT_QUALITY_ARM_THRESHOLD (on top of Supercharge
+  // being full) — see economy.ts and reducer.ts's updateStreakMeters. Consumed
+  // (reset to 0) the instant Overdrive fires, so it must be re-earned per window.
+  breakoutQualityScore: number
   // v0.3.5: capped ring of floating-combat-text bursts (visual only). See
   // FountainEvent. `fountainSeq` is the monotonic id source.
   fountainEvents: FountainEvent[]

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { OVERHEAT, type Candle, type ChartState } from '../game/chart'
 import { getSurfZone, getTierFloor } from '../game/economy'
-import type { ResistanceState, TapEffect } from '../game/types'
+import type { FountainEvent, ResistanceState, TapEffect } from '../game/types'
+import { StreakFountain } from './StreakFountain'
 
 interface FakeChartProps {
   chart: ChartState
@@ -14,6 +15,10 @@ interface FakeChartProps {
   // v0.3.5: streak-mastery aura states (visual only).
   supercharged: boolean
   overdrive: boolean
+  // v0.4B: hosted here (rather than as a viewport-fixed sibling in HomeScreen) so
+  // its lanes are positioned relative to the chart panel's own box and can never
+  // drift over the resistance line/Smash Window.
+  fountainEvents: FountainEvent[]
 }
 
 const TAP_FLASH_MS = 220
@@ -37,6 +42,7 @@ export function FakeChart({
   isDecaying,
   supercharged,
   overdrive,
+  fountainEvents,
 }: FakeChartProps) {
   const clamped = Math.max(0, Math.min(100, progress))
 
@@ -96,6 +102,14 @@ export function FakeChart({
   const rejected = phase === 'rejected' || phase === 'overheated'
   const approaching = phase === 'approaching'
 
+  // v0.4D: a persistent combo badge replaces the old floating "CHAIN ×N" fountain
+  // text — it lives in the header row (above the SVG, never over the resistance
+  // line) and just updates in place as the breakout streak climbs, with flame
+  // styling kicking in at higher tiers instead of another burst of text.
+  const breakoutStreak = resistance.breakoutStreak
+  const comboTier = overdrive ? 'overdrive' : breakoutStreak >= 5 ? 'tier-4' : breakoutStreak === 4 ? 'tier-3' : breakoutStreak === 3 ? 'tier-2' : 'tier-1'
+  const comboBadgeText = overdrive ? 'OVERDRIVE' : breakoutStreak >= 2 ? `×${breakoutStreak}` : null
+
   // Short action words — the player-facing teaching cue. Numbers live in dev stats.
   const cue = broken
     ? brokenPerfect
@@ -145,6 +159,7 @@ export function FakeChart({
       {overdrive ? <span className="chart-overdrive-flag">OVERDRIVE — GRAVITY HAS LEFT THE CHAT</span> : null}
       <div className="chart-header">
         <span className={`resistance-cue resistance-${phase}`}>{cue}</span>
+        {comboBadgeText ? <span className={`combo-badge ${comboTier}`}>{comboBadgeText}</span> : null}
         <strong className={isUp ? 'chart-up' : 'chart-down'}>{smash ? 'SMASH' : isUp ? 'UP ONLY' : 'DUMPING'}</strong>
       </div>
       <svg className="fake-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Fictional candlestick chart">
@@ -222,6 +237,7 @@ export function FakeChart({
         <strong className="curve-rail-value">{clamped.toFixed(1)}%</strong>
       </div>
       <p className="safety-line">Fictional arcade chart. No market data, no trading signal.</p>
+      <StreakFountain events={fountainEvents} />
     </section>
   )
 }

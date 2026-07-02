@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { getComboCritBonus, getIsNearTierFloor, getSurfZone, OVERDRIVE_DURATION_MS } from '../game/economy'
+import {
+  BREAKOUT_QUALITY_ARM_THRESHOLD,
+  getComboCritBonus,
+  getIsNearTierFloor,
+  getSurfZone,
+  OVERDRIVE_DURATION_MS,
+} from '../game/economy'
 import { playSound } from '../game/sound'
 import type { GameState } from '../game/types'
 
@@ -33,9 +39,25 @@ function chainTierClass(multiplier: number): string {
   return ''
 }
 
+// v0.4B: how long the Supercharge-rail swaps to the BREAKOUT reward readout —
+// its own (longer) window, separate from the CSS box-shadow pulse (480ms). The
+// rail has a stable dedicated slot below the button, so the reward reads there
+// instead of stacking another line into tap-float, which already carries
+// gain/chain/micro text directly over the button's own big label.
+const SUPERCHARGE_PULSE_MS = 480
+const BREAKOUT_REWARD_TEXT_MS = 1500
+// v0.4C: how long a rejected/overheated tap's "why didn't that charge" note holds
+// the rail before it falls back to the live Supercharge/quality-gate readout.
+const SUPERCHARGE_NOTE_TEXT_MS = 1400
+
 export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: MainActionButtonProps) {
   const [pulsing, setPulsing] = useState(false)
   const [recovering, setRecovering] = useState(false)
+  const [superchargePulse, setSuperchargePulse] = useState(false)
+  const [breakoutReward, setBreakoutReward] = useState<{ chain: number; superchargeGain: number; curvePercent: number } | null>(
+    null,
+  )
+  const [superchargeNote, setSuperchargeNote] = useState<{ text: string; kind: 'loss' | 'blocked' } | null>(null)
   const lastTapId = useRef<number | null>(null)
   const wasDecaying = useRef(false)
 
@@ -56,6 +78,42 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
     const timeout = window.setTimeout(() => setPulsing(false), PULSE_MS)
 
     return () => window.clearTimeout(timeout)
+  }, [state.lastTapEffect])
+
+  // v0.4B: BREAKOUT should visibly do something — pulse the Supercharge meter
+  // (it's already been nudged numerically by the reducer) and swap its label to
+  // a concrete "what just happened" readout, instead of leaving that gain silent.
+  useEffect(() => {
+    const reward = state.lastTapEffect?.breakoutReward
+
+    if (!reward) {
+      return
+    }
+
+    setSuperchargePulse(true)
+    setBreakoutReward(reward)
+    const pulseTimeout = window.setTimeout(() => setSuperchargePulse(false), SUPERCHARGE_PULSE_MS)
+    const textTimeout = window.setTimeout(() => setBreakoutReward(null), BREAKOUT_REWARD_TEXT_MS)
+
+    return () => {
+      window.clearTimeout(pulseTimeout)
+      window.clearTimeout(textTimeout)
+    }
+  }, [state.lastTapEffect])
+
+  // v0.4C: a rejected/overheated tap explains itself on the same rail slot the
+  // breakout reward uses — "why didn't the meter move" instead of a silent no-op.
+  useEffect(() => {
+    const note = state.lastTapEffect?.superchargeNote
+
+    if (!note) {
+      return
+    }
+
+    setSuperchargeNote(note)
+    const noteTimeout = window.setTimeout(() => setSuperchargeNote(null), SUPERCHARGE_NOTE_TEXT_MS)
+
+    return () => window.clearTimeout(noteTimeout)
   }, [state.lastTapEffect])
 
   // v0.3: brief green "recovering" flash the moment an active decay is broken.
@@ -96,6 +154,26 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   const overdriveRemaining = overdrive ? Math.max(0, state.overdriveUntil - Date.now()) : 0
   const overdriveSeconds = Math.ceil(overdriveRemaining / 1000)
   const overdrivePct = Math.min(100, (overdriveRemaining / OVERDRIVE_DURATION_MS) * 100)
+
+  // v0.4C Overdrive Quality Gate: the meter alone no longer arms Overdrive — it
+  // also needs recent breakout quality. Only surfaced once Supercharge is close
+  // to full so early-game doesn't get a wall of gate copy it can't act on yet.
+  const qualityRemaining = Math.max(0, Math.ceil(BREAKOUT_QUALITY_ARM_THRESHOLD - state.breakoutQualityScore))
+  const qualityReady = qualityRemaining <= 0
+  const showQualityHint = launched && !graduateReady && !overdrive && superchargePct >= 60
+  const cleanBreakoutsCopy = `${qualityRemaining} MORE CLEAN BREAKOUT${qualityRemaining === 1 ? '' : 'S'}`
+  let superchargeLabel: string
+  if (supercharged) {
+    superchargeLabel = qualityReady
+      ? 'OVERDRIVE READY'
+      : qualityRemaining >= BREAKOUT_QUALITY_ARM_THRESHOLD
+        ? 'MASH OPEN — NEED CLEAN BREAKOUTS'
+        : `MASH OPEN — ${cleanBreakoutsCopy}`
+  } else if (showQualityHint) {
+    superchargeLabel = qualityReady ? 'BREAKOUTS ARM OVERDRIVE' : cleanBreakoutsCopy
+  } else {
+    superchargeLabel = 'SUPERCHARGE'
+  }
 
   // v0.4A: the button is the main instruction surface for the Resistance loop.
   // Its copy is keyed to the resistance phase (with launch / graduate / overdrive
@@ -206,7 +284,9 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
 
       {launched && !graduateReady ? (
         <div
-          className={`supercharge-rail ${supercharged ? 'full' : ''} ${overdrive ? 'overdrive' : ''}`}
+          className={`supercharge-rail ${supercharged ? 'full' : ''} ${overdrive ? 'overdrive' : ''} ${
+            superchargePulse ? 'breakout-pulse' : ''
+          } ${supercharged && !qualityReady ? 'blocked' : ''} ${superchargeNote ? `charge-${superchargeNote.kind}` : ''}`}
           aria-label={overdrive ? 'Overdrive countdown' : 'Supercharge meter'}
         >
           {overdrive ? (
@@ -217,9 +297,27 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
               </div>
               <strong className="supercharge-value">{overdriveSeconds}s</strong>
             </>
+          ) : breakoutReward ? (
+            <>
+              <span className="supercharge-label breakout">
+                BREAKOUT +{breakoutReward.superchargeGain}⚡ · +{breakoutReward.curvePercent.toFixed(2)}% CURVE
+              </span>
+              <div className="supercharge-track">
+                <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />
+              </div>
+              <strong className="supercharge-value">{superchargePct}%</strong>
+            </>
+          ) : superchargeNote ? (
+            <>
+              <span className={`supercharge-label note-${superchargeNote.kind}`}>{superchargeNote.text}</span>
+              <div className="supercharge-track">
+                <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />
+              </div>
+              <strong className="supercharge-value">{superchargePct}%</strong>
+            </>
           ) : (
             <>
-              <span className="supercharge-label">{supercharged ? 'MASH WINDOW OPEN' : 'SUPERCHARGE'}</span>
+              <span className="supercharge-label">{superchargeLabel}</span>
               <div className="supercharge-track">
                 <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />
               </div>

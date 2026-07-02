@@ -1,7 +1,7 @@
 import { CARDS } from '../data/cards'
 import { getUpgrade, UPGRADES } from '../data/upgrades'
 import { CHART_TAP_IMPULSE_BASE } from './chart'
-import type { GameState } from './types'
+import type { GameState, ResistancePhase, TapRating } from './types'
 
 // v0.3.1 Economy Tuning: the amount of *curve-driving* Liquidity needed to fill
 // the bonding curve from 0→100%. Raised 13× from v0.3 (was 1000) so a full
@@ -34,23 +34,75 @@ export const COMBO_BREAK_MS = 1000
 export const COMBO_MAX_MULTIPLIER = 3
 
 // --- v0.3.5 Supercharge / Overdrive constants ---
-// Supercharge meter runs 0–100. It builds every tick while the Candle Chain is
-// alive (combo ≥ CHAIN_MIN), scaled by the live combo multiplier, so a hot chain
-// fills it in ~5–7s and a lukewarm one in ~12s. It bleeds slowly on a broken
-// chain. At 100 the run is "Supercharged".
+// Supercharge meter runs 0–100. It bleeds slowly whenever the Candle Chain is
+// broken. At 100 the run is "Supercharged" (cooler mashing, punchier taps).
+//
+// v0.4C Overdrive Quality Gate: raw combo length no longer *fuels* this meter —
+// holding a chain merely postpones the decay below. The actual fuel is
+// per-tap/breakout quality (see BREAKOUT_SUPERCHARGE_GAIN_* and
+// getTapSuperchargeTrickle), so a hot chain of mistimed spam sits flat instead
+// of climbing on its own. "Spam builds heat. Timing breaks walls."
 export const SUPERCHARGE_MAX = 100
 export const SUPERCHARGE_CHAIN_MIN = 5
-export const SUPERCHARGE_BUILD_PER_SEC = 6
 export const SUPERCHARGE_DECAY_PER_SEC = 8
 // While Supercharged, mashing heat builds at this fraction (cooler), and taps hit
 // this much harder into the chart.
 export const SUPERCHARGE_HEAT_SCALE = 0.55
 export const SUPERCHARGE_IMPULSE_SCALE = 1.15
-// Hold Supercharge pinned at 100 (with the chain alive) this long to arm
-// Overdrive, which then runs for OVERDRIVE_DURATION_MS. Entering Overdrive spends
-// the meter back to 0, so it must be rebuilt for the next one.
+// Hold Supercharge pinned at 100 (with the quality gate cleared — see
+// BREAKOUT_QUALITY_ARM_THRESHOLD) this long to arm Overdrive, which then runs
+// for OVERDRIVE_DURATION_MS. Entering Overdrive spends the meter back to 0 and
+// consumes the quality gate, so both must be rebuilt for the next one.
 export const OVERDRIVE_ARM_MS = 4000
 export const OVERDRIVE_DURATION_MS = 8000
+// v0.4C: a tiny per-tap Supercharge trickle for an ordinary/weak tap that never
+// touches the resistance line — enough that casual tapping isn't completely dead,
+// nowhere near enough to arm Overdrive on its own (spam would need ~7 min of
+// nonstop weak taps to fill the meter on trickle alone). Perfect/good taps that
+// (rarely) miss the breakout path still get a small nudge, well under an actual
+// breakout's payout.
+export const SUPERCHARGE_TRICKLE_WEAK = 0.2
+export const SUPERCHARGE_TRICKLE_GOOD = 0.5
+export const SUPERCHARGE_TRICKLE_PERFECT = 1
+// v0.4C: a mistimed tap that gets rejected visibly costs banked charge — "REJECTED
+// — CHARGE LOST". Overheated taps are milder: no charge gained, but nothing taken
+// either ("TOO HOT — NO CHARGE") since the chart's own reversal/heat physics
+// already punish that state hard.
+export const SUPERCHARGE_REJECT_LOSS = 10
+
+// v0.4C Overdrive Quality Gate. `breakoutQualityScore` is a small, fast-moving
+// tally of *recent* breakout quality — separate from the Supercharge number so a
+// player can't bank one great streak and coast on raw combo forever. Perfect/good
+// breakouts raise it, rejected/overheated taps knock it back down, and it decays
+// on its own so "recent" stays honest. Overdrive requires both the meter full AND
+// this score at/above the threshold; it resets to 0 the instant Overdrive fires.
+export const BREAKOUT_QUALITY_MAX = 6
+export const BREAKOUT_QUALITY_ARM_THRESHOLD = 3
+export const BREAKOUT_QUALITY_GAIN_PERFECT = 2
+export const BREAKOUT_QUALITY_GAIN_GOOD = 1
+export const BREAKOUT_QUALITY_LOSS = 1
+export const BREAKOUT_QUALITY_DECAY_PER_SEC = 0.08
+
+export function getTapSuperchargeTrickle(rating: TapRating | null): number {
+  switch (rating) {
+    case 'perfect':
+      return SUPERCHARGE_TRICKLE_PERFECT
+    case 'good':
+      return SUPERCHARGE_TRICKLE_GOOD
+    case 'weak':
+      return SUPERCHARGE_TRICKLE_WEAK
+    default:
+      // 'rejected' / 'overheated' / null (Overdrive bypasses rating entirely).
+      return 0
+  }
+}
+
+// v0.4C: combo may still nudge a breakout's Supercharge payout, but capped hard
+// so a long raw chain can't out-fuel actual timing — combo alone maxes out a 1.3×
+// bump, versus a clean perfect-vs-good breakout call being a ~2× difference.
+export function getBreakoutComboScale(comboMultiplier: number): number {
+  return Math.min(1 + (comboMultiplier - 1) * 0.15, 1.3)
+}
 // During Overdrive: no heat gain, no reversal, punchier taps, a small crit bump,
 // and a modest (not pace-breaking) curve boost.
 export const OVERDRIVE_IMPULSE_SCALE = 1.5
@@ -375,4 +427,88 @@ export function getChartJeetDump(state: GameState): number {
 export function getChartAutoImpulse(state: GameState): number {
   const passive = getPassiveGainPerSecond(state)
   return passive > 0 ? Math.min(passive * 0.05, 6) : 0
+}
+
+// --- v0.4B Focus + Spam Punishment: tap-timing reward/heat/impulse shaping ---
+// `classifyTapRating` (chart.ts) already scores a tap against the live resistance
+// target the instant BEFORE its own impulse lands — perfect/good read as "you
+// timed this", weak/rejected/overheated read as "you didn't". These three scales
+// turn that read into the actual incentive: precise taps pay more and cook less,
+// spam taps pay less and cook more. `null` (Overdrive bypasses classification
+// entirely — see reducer.ts) always means "no penalty, no bonus", preserving
+// Overdrive's "mash without consequences" contract.
+export function getTapRatingRewardScale(rating: TapRating | null): number {
+  switch (rating) {
+    case 'perfect':
+      return 1.2
+    case 'good':
+      return 1.0
+    case 'weak':
+      return 0.6
+    case 'rejected':
+      return 0.25
+    case 'overheated':
+      // Zero: a tap thrown while TOO HOT should read as "this did nothing" for
+      // wallet/curve progress, not just "did less" — the headless sim (see
+      // memory) showed a milder penalty here still let raw spam volume
+      // out-graduate timed play. walletGain still floors at 1 in the reducer so
+      // the tap never feels like a dead input, just an unrewarded one.
+      return 0
+    default:
+      return 1.0
+  }
+}
+
+// v0.4D: perfect/good heat-add trimmed further (0.75→0.62, 1.0→0.85) so a
+// deliberate timed rhythm can sit near resistance without cooking itself out of
+// the zone; weak/rejected bumped up (1.3→1.4, 1.7→1.8) to keep the spam-vs-timed
+// heat gap at least as wide as before, not narrower.
+export function getTapRatingHeatScale(rating: TapRating | null): number {
+  switch (rating) {
+    case 'perfect':
+      return 0.62
+    case 'good':
+      return 0.85
+    case 'weak':
+      return 1.4
+    case 'rejected':
+      return 1.8
+    case 'overheated':
+      return 2.0
+    default:
+      return 1.0
+  }
+}
+
+// v0.4D: good's impulse bumped (1.0→1.12) so a well-timed (not just perfect) tap
+// pushes noticeably harder — weak/rejected/overheated (the spam-ish outcomes)
+// are untouched, so this only rewards taps that were already reading as "on
+// target", not raw tap volume.
+export function getTapRatingImpulseScale(rating: TapRating | null): number {
+  switch (rating) {
+    case 'perfect':
+      return 1.15
+    case 'good':
+      return 1.12
+    case 'weak':
+      return 0.65
+    case 'rejected':
+      return 0.4
+    case 'overheated':
+      return 0.2
+    default:
+      return 1.0
+  }
+}
+
+// v0.4D Resistance Surf: while the chart is actively holding station near a live
+// resistance target (approaching/smash), gravity eases off a bit so a controlled
+// tap rhythm can ride the line instead of needing panic-mash cadence to fight the
+// fall. Reverts to full gravity the instant the target flips to rejected/
+// overheated, so mashing through TOO HOT still dumps the chart at full force —
+// the ease is a reward for engaging cleanly, not a blanket softener.
+export const RESISTANCE_APPROACH_GRAVITY_SCALE = 0.82
+
+export function getResistancePhaseGravityScale(phase: ResistancePhase): number {
+  return phase === 'approaching' || phase === 'smash' ? RESISTANCE_APPROACH_GRAVITY_SCALE : 1
 }

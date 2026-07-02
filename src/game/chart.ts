@@ -85,19 +85,25 @@ export const CHART_TAP_STEP = 0.05
 
 // --- v0.4 / v0.4A Resistance Breakout arcade target ---
 // Smash window length (ms). While it is open the panel/button scream "SMASH NOW"
-// and any tap breaks the line.
-export const RESISTANCE_WINDOW_MS = 320
+// and any tap breaks the line. v0.4D: lengthened from 320 so the GET READY →
+// SMASH NOW handoff isn't a hair-trigger — a deliberate tap rhythm gets a real
+// beat to react in, not just a spam-favoring reflex check.
+export const RESISTANCE_WINDOW_MS = 420
 // How fast a live line drifts down toward a chart stalled below it, keeping the
 // target reachable instead of parked out of reach.
 export const RESISTANCE_DRIFT_PER_SEC = 2
+// v0.4D: once the chart is within this band below the line, drift holds the line
+// dead still instead of continuing to creep — a surfing player gets a stable
+// target to hold station against rather than one that's still sliding.
+export const RESISTANCE_DRIFT_HOLD_BAND = 8
 // The chart must climb into this band below the line for the smash window to open.
-export const RESISTANCE_NEAR_BAND = 7
+export const RESISTANCE_NEAR_BAND = 9
 // Distance bands for rating a breakout tap (line price − chart price).
 export const RESISTANCE_PERFECT_BELOW = 4
 export const RESISTANCE_PERFECT_ABOVE = 6
-export const RESISTANCE_GOOD_BELOW = 18
+export const RESISTANCE_GOOD_BELOW = 20
 // Within this distance below the line, the panel/button flip to "approaching".
-export const RESISTANCE_APPROACH_BAND = 16
+export const RESISTANCE_APPROACH_BAND = 20
 // Transient event beats: how long broken/rejected/overheated hold before the next
 // target spawns.
 export const RESISTANCE_BROKEN_HOLD_MS = 620
@@ -111,6 +117,12 @@ export const RESISTANCE_STALE_ABOVE_MS = 700
 // The chart crashing this far below the line respawns a nearer target instead of
 // waiting for the slow drift to catch up.
 export const RESISTANCE_FAR_BELOW = 34
+// v0.4B Focus + Spam Punishment: while the resistance target is holding its
+// 'overheated' beat (the TOO HOT scold window), idle ticks bleed chart heat this
+// much faster so a player who actually stops tapping recovers visibly quicker
+// than one who keeps mashing through it. Only applied by the idle TICK path, not
+// the tap path, so mashing through the window never benefits from it.
+export const RESISTANCE_OVERHEAT_RECOVERY_SCALE = 1.6
 
 function roll(seed: number): number {
   const value = Math.sin(seed * 127.11) * 43758.5453
@@ -127,9 +139,11 @@ function clamp(value: number, min: number, max: number): number {
 
 // Spawn the next line in a readable mid/high band above the chart. Deliberately
 // clamped well below the ceiling (max 80) so chained breakouts never march the
-// target up to a permanent top-line.
+// target up to a permanent top-line. v0.4D: spacing narrowed from 11–17 to 8–13 —
+// the line was spawning far enough out that a deliberate (non-spam) tap rhythm
+// struggled to close the gap before losing momentum to gravity.
 function resistanceSpawnPrice(anchorPrice: number, id: number): number {
-  const spacing = 11 + roll(id * 17.19 + anchorPrice * 0.37) * 6
+  const spacing = 8 + roll(id * 17.19 + anchorPrice * 0.37) * 5
   return round(clamp(anchorPrice + spacing, 40, 80))
 }
 
@@ -196,9 +210,14 @@ export function advanceResistance(
   }
 
   // A live line drifts down toward a chart stalled below it so it stays reachable.
+  // v0.4D: the hold band widened from 5 → RESISTANCE_DRIFT_HOLD_BAND so the line
+  // goes fully stationary as soon as the chart is genuinely close, instead of
+  // still creeping while the player is trying to hold station near it.
   const driftFloor = Math.min(80, Math.max(40, chart.price + 9))
   const driftedPrice =
-    chart.price < resistance.price - 5 ? Math.max(driftFloor, resistance.price - RESISTANCE_DRIFT_PER_SEC * dt) : resistance.price
+    chart.price < resistance.price - RESISTANCE_DRIFT_HOLD_BAND
+      ? Math.max(driftFloor, resistance.price - RESISTANCE_DRIFT_PER_SEC * dt)
+      : resistance.price
   const price = round(driftedPrice)
   const distance = price - chart.price
 
@@ -290,8 +309,12 @@ export function resolveBreakoutTap(
   now: number,
   overheated: boolean,
 ): BreakoutOutcome {
-  // A frozen event beat already resolved this cycle — a tap mid-shatter is a no-op.
-  if (resistance.phase === 'broken' || resistance.phase === 'rejected') {
+  // A frozen event beat already resolved this cycle — a tap mid-shatter (or
+  // mid-scold) is a no-op. v0.4B: 'overheated' joins this freeze so mashing
+  // through the TOO HOT hold can't re-trigger the scold (and its combat text)
+  // on every single tap — the reward/heat penalty for those repeat taps is
+  // handled separately via the pre-tap rating scale in the reducer.
+  if (resistance.phase === 'broken' || resistance.phase === 'rejected' || resistance.phase === 'overheated') {
     return 'none'
   }
 
@@ -341,6 +364,11 @@ export interface ChartAdvanceOpts {
   // the chart can be pinned high and hot without dumping. Heat still decays
   // normally, so it drains back to safe by the time Overdrive ends.
   noReversal?: boolean
+  // v0.4B: >1 speeds up heat decay this step (used by the idle TICK path while
+  // the resistance target holds its 'overheated' beat, so pausing during TOO HOT
+  // visibly recovers faster than mashing through it). Never applied to the
+  // one-off tap heatAdd itself, only the ongoing decay term.
+  heatDecayScale?: number
 }
 
 // Largest stable integration step. friction × dt must stay < 1, and we want
@@ -372,6 +400,7 @@ export function advanceChart(chart: ChartState, dt: number, opts: ChartAdvanceOp
               autoImpulse: opts.autoImpulse,
               heatScale: opts.heatScale,
               noReversal: opts.noReversal,
+              heatDecayScale: opts.heatDecayScale,
             },
       )
       remaining -= step
@@ -393,8 +422,10 @@ export function advanceChart(chart: ChartState, dt: number, opts: ChartAdvanceOp
 
   // Heat: decay, per-tap add, and a top-up while pinned high. heatScale (<1 while
   // Supercharged, 0 during Overdrive) throttles the *gains* but never the decay,
-  // so a hot chart always cools back down on its own.
-  heat = Math.max(0, heat - HEAT_DECAY * dt + (opts.heatAdd ?? 0) * heatScale)
+  // so a hot chart always cools back down on its own. heatDecayScale (v0.4B)
+  // can speed the decay term up further (idle recovery during a TOO HOT hold).
+  const heatDecayScale = opts.heatDecayScale ?? 1
+  heat = Math.max(0, heat - HEAT_DECAY * heatDecayScale * dt + (opts.heatAdd ?? 0) * heatScale)
   if (price > 84) {
     heat += HIGH_HEAT_GAIN * dt * heatScale
   }
