@@ -352,7 +352,11 @@ function sendCandle(state: GameState): GameState {
   }
 
   const tapId = state.taps + 1
-  const gain = getClickGain(state)
+  const baseGain = getClickGain(state)
+  // v0.2 juice: ~1-in-8 taps land a "critical candle" for a chunkier payout
+  // and a louder visual. Deterministic so it stays reproducible/save-safe.
+  const isCrit = deterministicRoll(tapId * 2.71 + state.prestigeCount * 3.77) < 0.12
+  const gain = isCrit ? baseGain * 3 : baseGain
 
   let next: GameState = {
     ...state,
@@ -363,15 +367,15 @@ function sendCandle(state: GameState): GameState {
     },
   }
 
-  next = awardLiquidity(next, gain, 4)
+  next = awardLiquidity(next, gain, isCrit ? 8 : 4)
   next = addTicker(next, pickLine(TAP_LINES, next.taps))
 
   const microRoll = deterministicRoll(tapId * 7.13 + state.prestigeCount * 3.01)
-  const microLine = microRoll < 0.15 ? pickLine(MICRO_LINES, tapId) : null
+  const microLine = isCrit ? 'CRITICAL CANDLE' : microRoll < 0.15 ? pickLine(MICRO_LINES, tapId) : null
 
   next = {
     ...next,
-    lastTapEffect: { id: tapId, gain, microLine },
+    lastTapEffect: { id: tapId, gain, microLine, crit: isCrit },
   }
 
   if (next.taps % 12 === 0) {

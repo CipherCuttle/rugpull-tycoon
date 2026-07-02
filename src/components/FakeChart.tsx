@@ -52,9 +52,17 @@ export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect }:
     return () => window.clearTimeout(timeout)
   }, [tier])
 
+  // Near-graduation instability: once the curve is almost full (but not yet
+  // done), the whole machine gets the shakes. `dumping` washes it red whenever
+  // the visible line is trending down.
+  const unstable = clamped >= 85 && clamped < 100
+  const dumping = !isUp
+
   return (
     <section
-      className={`chart-panel hero-chart ${tapFlash ? 'tap-flash' : ''} ${milestonePulse ? 'milestone-pulse' : ''}`}
+      className={`chart-panel hero-chart ${tapFlash ? 'tap-flash' : ''} ${milestonePulse ? 'milestone-pulse' : ''} ${
+        dumping ? 'dumping' : ''
+      } ${unstable ? 'unstable' : ''}`}
       aria-label="Fake chart"
     >
       <div className="chart-header">
@@ -64,12 +72,12 @@ export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect }:
       <svg className="fake-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Fictional chart">
         <defs>
           <linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#52ff88" stopOpacity="0.36" />
-            <stop offset="100%" stopColor="#52ff88" stopOpacity="0" />
+            <stop offset="0%" stopColor={isUp ? '#46ff9b' : '#ff3b52'} stopOpacity="0.36" />
+            <stop offset="100%" stopColor={isUp ? '#46ff9b' : '#ff3b52'} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <path d={`M0,${height} L${path.replaceAll(' ', ' L')} L${width},${height} Z`} fill="url(#chartFill)" />
-        <polyline points={path} fill="none" stroke={isUp ? '#52ff88' : '#ff4d5d'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+        <path className="chart-fill" d={`M0,${height} L${path.replaceAll(' ', ' L')} L${width},${height} Z`} fill="url(#chartFill)" />
+        <polyline points={path} fill="none" stroke={isUp ? '#46ff9b' : '#ff3b52'} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
         <line x1="0" x2={width} y1="118" y2="118" stroke="#282828" strokeDasharray="7 8" />
         <line x1="0" x2={width} y1="72" y2="72" stroke="#282828" strokeDasharray="7 8" />
       </svg>

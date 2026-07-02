@@ -12,6 +12,7 @@ import { UpgradeList } from '../components/UpgradeList'
 import { formatNumber } from '../game/format'
 import { getMilestoneLabel, getNextObjective } from '../game/objective'
 import { clearSave } from '../game/save'
+import { isSoundEnabled, setSoundEnabled } from '../game/sound'
 import type { GameAction, GameState } from '../game/types'
 
 interface HomeScreenProps {
@@ -24,6 +25,15 @@ type Drawer = 'upgrades' | 'cards' | 'event'
 export function HomeScreen({ state, dispatch }: HomeScreenProps) {
   const [drawer, setDrawer] = useState<Drawer>('upgrades')
   const [isPrestigeOpen, setPrestigeOpen] = useState(false)
+  // Audio placeholder toggle (v0.2). Persists via game/sound.ts; the actual
+  // playback is still a no-op until real samples land.
+  const [soundOn, setSoundOn] = useState(isSoundEnabled)
+
+  function toggleSound() {
+    const next = !soundOn
+    setSoundEnabled(next)
+    setSoundOn(next)
+  }
 
   const milestoneLabel = getMilestoneLabel(state.bondingCurveTier)
   const objective = getNextObjective(state)
@@ -101,9 +111,19 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
 
       <footer className="safety-footer">
         <p>Fictional satire. No wallets. No trading. No deposits. No withdrawals.</p>
-        <button type="button" className="reset-save-button" onClick={handleResetSave}>
-          Delete My Bags
-        </button>
+        <div className="footer-controls">
+          <button
+            type="button"
+            className={`sound-toggle ${soundOn ? 'on' : ''}`}
+            aria-pressed={soundOn}
+            onClick={toggleSound}
+          >
+            {soundOn ? 'Sound: On' : 'Sound: Off'}
+          </button>
+          <button type="button" className="reset-save-button" onClick={handleResetSave}>
+            Delete My Bags
+          </button>
+        </div>
       </footer>
 
       {/* 9. Onboarding overlay */}

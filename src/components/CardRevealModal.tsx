@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { getCard } from '../data/cards'
+import { playSound } from '../game/sound'
 import type { CardRevealEffect } from '../game/types'
 
 interface CardRevealModalProps {
@@ -18,6 +19,13 @@ export function CardRevealModal({ pendingCardReveal }: CardRevealModalProps) {
   // game-state dismiss action, per subtask 2 scope.
   const [acknowledgedId, setAcknowledgedId] = useState<number | null>(null)
 
+  // Fire the reveal cue once per new card id (no-op until real audio lands).
+  useEffect(() => {
+    if (pendingCardReveal && pendingCardReveal.id !== acknowledgedId) {
+      playSound('card')
+    }
+  }, [pendingCardReveal, acknowledgedId])
+
   if (!pendingCardReveal || pendingCardReveal.id === acknowledgedId) {
     return null
   }
@@ -31,7 +39,7 @@ export function CardRevealModal({ pendingCardReveal }: CardRevealModalProps) {
   return (
     <div className="card-reveal-backdrop" role="dialog" aria-modal="true" aria-labelledby="card-reveal-title">
       <section className="card-reveal-modal">
-        <span className="modal-kicker">Card Found</span>
+        <span className="modal-kicker">Evidence Found</span>
         <h2 id="card-reveal-title">{card.name}</h2>
         <span className="card-rarity">{card.rarity}</span>
         <p>{card.flavorText}</p>
@@ -39,7 +47,7 @@ export function CardRevealModal({ pendingCardReveal }: CardRevealModalProps) {
           <p className="card-reveal-duplicate">Duplicate receipt. +{DUPLICATE_CARD_COPIUM_REWARD} Copium.</p>
         ) : null}
         <button type="button" onClick={() => setAcknowledgedId(pendingCardReveal.id)}>
-          Neat
+          Bag It
         </button>
       </section>
     </div>

@@ -1,4 +1,5 @@
 import { getPrestigeReward } from '../game/economy'
+import { playSound } from '../game/sound'
 import type { GameState } from '../game/types'
 
 interface PrestigeModalProps {
@@ -27,6 +28,7 @@ export function PrestigeModal({ state, open, onClose, onGraduate }: PrestigeModa
   const graduationTitle = `${ticker} GRADUATED DIRECTLY INTO A CRIME SCENE`
 
   function handleGraduate() {
+    playSound('graduate')
     onGraduate()
     onClose()
   }
@@ -43,9 +45,18 @@ export function PrestigeModal({ state, open, onClose, onGraduate }: PrestigeModa
           <p>You were the exit interface.</p>
         </div>
         <div className="prestige-rewards">
-          <span>Rug Prestige +{reward.rugPrestige}</span>
-          <span>Exit Liquidity +{reward.exitLiquidity}</span>
-          <span>Receipts +{reward.receipts}</span>
+          <span>
+            <span className="reward-label">Rug Prestige</span>
+            <span className="reward-value">+{reward.rugPrestige}</span>
+          </span>
+          <span>
+            <span className="reward-label">Exit Liq</span>
+            <span className="reward-value">+{reward.exitLiquidity}</span>
+          </span>
+          <span>
+            <span className="reward-label">Receipts</span>
+            <span className="reward-value">+{reward.receipts}</span>
+          </span>
         </div>
         <button type="button" onClick={handleGraduate}>
           LAUNCH NEXT HALLUCINATION

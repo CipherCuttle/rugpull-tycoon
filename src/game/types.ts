@@ -85,6 +85,10 @@ export interface TapEffect {
   id: number
   gain: number
   microLine: string | null
+  // v0.2 juice: an occasional "critical" tap for a stronger visual + payout.
+  // Optional so older saves that stored a lastTapEffect stay valid (defaults
+  // to a non-crit when absent).
+  crit?: boolean
 }
 
 export interface PurchaseEffect {
