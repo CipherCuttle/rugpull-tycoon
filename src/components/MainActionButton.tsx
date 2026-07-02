@@ -1,12 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import {
-  GRACE_TICKS,
-  getComboCritBonus,
-  getIsNearTierFloor,
-  getSurfZone,
-  getTierFloor,
-  OVERDRIVE_DURATION_MS,
-} from '../game/economy'
+import { getComboCritBonus, getIsNearTierFloor, getSurfZone, OVERDRIVE_DURATION_MS } from '../game/economy'
 import { playSound } from '../game/sound'
 import type { GameState } from '../game/types'
 
@@ -86,15 +79,6 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   const decaying = launched && !graduateReady && state.isDecaying
   const nearFloor = decaying && getIsNearTierFloor(state)
   const panic = decaying && (nearFloor || almost)
-  // Grace warning: idle but not yet decaying, and there is fractional progress
-  // above the floor that gravity could threaten.
-  const graceWarning =
-    launched &&
-    !graduateReady &&
-    !decaying &&
-    state.idleTicks >= 1 &&
-    state.idleTicks < GRACE_TICKS &&
-    state.bondingCurveProgress > getTierFloor(state.bondingCurveTier) + 0.05
 
   // v0.3.2 Candle Chain state.
   const multiplier = state.comboMultiplier
@@ -113,33 +97,53 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   const overdriveSeconds = Math.ceil(overdriveRemaining / 1000)
   const overdrivePct = Math.min(100, (overdriveRemaining / OVERDRIVE_DURATION_MS) * 100)
 
-  const label = !launched
-    ? `LAUNCH ${state.currentCoin.ticker}`
-    : graduateReady
-      ? `GRADUATE ${state.currentCoin.ticker}`
-      : comboActive
-        ? `CANDLE CHAIN ×${multiplier.toFixed(1)}`
-        : 'SEND THE CANDLE'
+  // v0.4A: the button is the main instruction surface for the Resistance loop.
+  // Its copy is keyed to the resistance phase (with launch / graduate / overdrive
+  // and the Chart-Gravity decay warnings layered on top), so it always tells the
+  // player what to do, when to tap, and what just happened. Kept short for mobile.
+  const phase = state.resistance.phase
+  const breakoutStreak = state.resistance.breakoutStreak
+  const resistancePhase = launched && !graduateReady && !overdrive ? phase : null
 
-  const detail = !launched
-    ? 'No wallets. No markets. Just satire.'
-    : graduateReady
-      ? 'The bonding curve is done pretending.'
-      : chainAtRisk
-        ? CHAIN_BREAKING_LINES[state.taps % CHAIN_BREAKING_LINES.length]
-        : nearFloor
-          ? 'ONE CANDLE FROM THE FLOOR — mash to hold it.'
-          : decaying && almost
-            ? 'SHOVE IT OVER BEFORE GRAVITY DOES.'
-            : decaying
-              ? 'CURVE BLEEDING — keep sending candles.'
-              : almost
-                ? 'Curve destabilizing. One more shove.'
-                : comboActive
-                  ? `${state.combo} candle chain · ×${multiplier.toFixed(1)} Curve Push`
-                  : graceWarning
-                    ? 'Chart Gravity engaging.'
-                    : 'Mash to build a Candle Chain'
+  let label: string
+  let detail: string
+  if (!launched) {
+    label = `LAUNCH ${state.currentCoin.ticker}`
+    detail = 'No wallets. No markets. Just satire.'
+  } else if (graduateReady) {
+    label = `GRADUATE ${state.currentCoin.ticker}`
+    detail = 'The bonding curve is done pretending.'
+  } else if (overdrive) {
+    label = 'OVERDRIVE'
+    detail = 'MASH WITHOUT CONSEQUENCES'
+  } else if (phase === 'smash') {
+    label = 'SMASH RESISTANCE'
+    detail = 'TAP NOW FOR BREAKOUT'
+  } else if (phase === 'broken') {
+    label = `BREAKOUT CHAIN ×${breakoutStreak}`
+    detail = 'NEXT RESISTANCE INCOMING'
+  } else if (phase === 'rejected') {
+    label = 'REJECTED'
+    detail = 'RECOVER THE CHART'
+  } else if (phase === 'overheated') {
+    label = 'TOO HOT'
+    detail = 'LET IT BREATHE'
+  } else if (decaying && (nearFloor || almost)) {
+    label = 'SEND THE CANDLE'
+    detail = nearFloor ? 'ONE CANDLE FROM THE FLOOR — mash to hold it.' : 'SHOVE IT OVER BEFORE GRAVITY DOES.'
+  } else if (decaying) {
+    label = 'SEND THE CANDLE'
+    detail = 'CURVE BLEEDING — keep sending candles.'
+  } else if (chainAtRisk) {
+    label = 'SEND THE CANDLE'
+    detail = CHAIN_BREAKING_LINES[state.taps % CHAIN_BREAKING_LINES.length]
+  } else if (phase === 'approaching') {
+    label = 'SEND THE CANDLE'
+    detail = 'GET READY — SMASH INCOMING'
+  } else {
+    label = 'SEND THE CANDLE'
+    detail = 'BUILD MOMENTUM TO RESISTANCE'
+  }
 
   function handleClick() {
     if (!launched) {
@@ -173,6 +177,8 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
           recovering ? 'recovering' : ''
         } ${chainAtRisk ? 'chain-risk' : ''} ${chainClass} ${supercharged ? 'supercharged' : ''} ${
           overdrive ? 'overdrive' : ''
+        } ${resistancePhase === 'smash' ? 'breakout-ready' : ''} ${resistancePhase === 'broken' ? 'broken' : ''} ${
+          resistancePhase === 'rejected' || resistancePhase === 'overheated' ? 'breakout-rejected' : ''
         }`}
         type="button"
         onClick={handleClick}
