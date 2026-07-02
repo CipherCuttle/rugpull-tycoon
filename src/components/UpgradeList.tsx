@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { UPGRADES } from '../data/upgrades'
-import { getUpgradeCost } from '../game/economy'
+import {
+  getAllGainsMultiplier,
+  getBondingCurveDelta,
+  getCardUnlockChance,
+  getClickGain,
+  getDecayRate,
+  getHeatGain,
+  getHypeMultiplier,
+  getJeetLossRatio,
+  getPassiveGainPerSecond,
+  getUpgradeCost,
+} from '../game/economy'
 import { playSound } from '../game/sound'
 import type { UpgradeDefinition, UpgradeEffect, GameState } from '../game/types'
 
@@ -69,7 +80,55 @@ function formatEffect(effect: UpgradeEffect, value: number): string {
   }
 }
 
-function CurrentEffect({ upgrade, level }: { upgrade: UpgradeDefinition; level: number }) {
+function stateAfterNextLevel(state: GameState, upgrade: UpgradeDefinition, level: number): GameState {
+  return {
+    ...state,
+    upgrades: {
+      ...state.upgrades,
+      [upgrade.id]: level + 1,
+    },
+  }
+}
+
+function formatPercent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`
+}
+
+function formatMetric(value: number): string {
+  return value >= 10 ? Math.round(value).toString() : value.toFixed(1)
+}
+
+function impactReadout(state: GameState, upgrade: UpgradeDefinition, level: number): string {
+  const after = stateAfterNextLevel(state, upgrade, level)
+
+  switch (upgrade.effect) {
+    case 'click':
+      return `Tap ${getClickGain(state)} → ${getClickGain(after)}`
+    case 'passive':
+      return `Passive/sec ${formatMetric(getPassiveGainPerSecond(state))} → ${formatMetric(getPassiveGainPerSecond(after))}`
+    case 'hype':
+      return `Hype ×${getHypeMultiplier(state).toFixed(2)} → ×${getHypeMultiplier(after).toFixed(2)}`
+    case 'curve': {
+      const before = getBondingCurveDelta(state, getClickGain(state))
+      const next = getBondingCurveDelta(after, getClickGain(after))
+      return `Curve/tap ${before.toFixed(3)}% → ${next.toFixed(3)}%`
+    }
+    case 'cardChance':
+      return `Receipt odds ${formatPercent(getCardUnlockChance(state))} → ${formatPercent(getCardUnlockChance(after))}`
+    case 'jeetShield':
+      return `Jeet loss ${formatPercent(getJeetLossRatio(state))} → ${formatPercent(getJeetLossRatio(after))}`
+    case 'heatShield':
+      return `Heat/tap ${getHeatGain(state).toFixed(2)} → ${getHeatGain(after).toFixed(2)}`
+    case 'allGains':
+      return `All gains ×${getAllGainsMultiplier(state).toFixed(2)} → ×${getAllGainsMultiplier(after).toFixed(2)}`
+    case 'decay':
+      return `Gravity/sec ${getDecayRate(state).toFixed(2)}% → ${getDecayRate(after).toFixed(2)}%`
+    default:
+      return 'Effect improves next buy'
+  }
+}
+
+function CurrentEffect({ state, upgrade, level }: { state: GameState; upgrade: UpgradeDefinition; level: number }) {
   const perLevel = formatEffect(upgrade.effect, upgrade.effectValue)
 
   return (
@@ -79,6 +138,7 @@ function CurrentEffect({ upgrade, level }: { upgrade: UpgradeDefinition; level: 
         {level > 0 ? formatEffect(upgrade.effect, upgrade.effectValue * level) : 'not hired yet'}
       </span>
       <span className="upgrade-effect-next">{perLevel}/lv</span>
+      <span className="upgrade-impact-next">{impactReadout(state, upgrade, level)}</span>
     </div>
   )
 }
@@ -133,7 +193,7 @@ export function UpgradeList({ state, onBuy }: UpgradeListProps) {
                   <strong>{upgrade.name}</strong>
                   <span>Lv {level}</span>
                 </div>
-                <CurrentEffect upgrade={upgrade} level={level} />
+                <CurrentEffect state={state} upgrade={upgrade} level={level} />
                 <p>{upgrade.description}</p>
               </div>
               <button type="button" disabled={!canBuy} onClick={() => handleBuy(upgrade.id)}>

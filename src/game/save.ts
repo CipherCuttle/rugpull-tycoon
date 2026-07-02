@@ -1,3 +1,4 @@
+import { createInitialChart } from './chart'
 import { getBondingCurveTier } from './economy'
 import type { GameState } from './types'
 import { SAVE_VERSION } from './types'
@@ -20,8 +21,7 @@ function looksLikeGameState(value: unknown): value is GameState {
     isRecord(value.upgrades) &&
     isRecord(value.cards) &&
     isRecord(value.event) &&
-    Array.isArray(value.tickerHistory) &&
-    Array.isArray(value.chartPoints)
+    Array.isArray(value.tickerHistory)
   )
 }
 
@@ -29,8 +29,8 @@ function looksLikeGameState(value: unknown): value is GameState {
 // still pass looksLikeGameState() (the new fields are additive, so the
 // shape check above never required them). This backfills sensible
 // defaults for those saves. onboardingComplete is deliberately forced to
-// `true` here (never `false`) so returning players never see onboarding
-// replayed — only a brand-new createInitialGame() defaults it to `false`.
+// `true` here (never `false`) because v0.3.3 keeps input unblocked from the
+// first screen; only the graduation/prestige flow should open a modal.
 //
 // SAVE_VERSION is intentionally NOT bumped for the v0.3 Chart Gravity fields:
 // looksLikeGameState() gates loading on `saveVersion === SAVE_VERSION`, so a
@@ -39,12 +39,10 @@ function looksLikeGameState(value: unknown): value is GameState {
 // new fields are additive and default cleanly below, so no bump is needed.
 function migrateGameState(value: GameState): GameState {
   const raw = value as Partial<GameState>
-  const hadOnboardingField = typeof raw.onboardingComplete === 'boolean'
-
   return {
     ...value,
     bondingCurveTier: raw.bondingCurveTier ?? getBondingCurveTier(value.bondingCurveProgress),
-    onboardingComplete: hadOnboardingField ? value.onboardingComplete : true,
+    onboardingComplete: true,
     lastTapEffect: raw.lastTapEffect ?? null,
     lastPurchaseEffect: raw.lastPurchaseEffect ?? null,
     pendingCardReveal: raw.pendingCardReveal ?? null,
@@ -62,9 +60,14 @@ function migrateGameState(value: GameState): GameState {
     comboMultiplier: raw.comboMultiplier ?? 1,
     lastTapAt: raw.lastTapAt ?? 0,
     maxComboThisRun: raw.maxComboThisRun ?? 0,
-    surfPressure: raw.surfPressure ?? 0,
+    // v0.3.4 Candlestick Physics: additive. Old saves (which stored surfPressure
+    // + a chartPoints line) load with a fresh, pre-rolled candle chart; the next
+    // tap/tick drives it normally. The stale surfPressure/chartPoints fields are
+    // simply ignored.
+    chart: raw.chart ?? createInitialChart(),
     toast: raw.toast ?? null,
     newCardCount: raw.newCardCount ?? 0,
+    streakEffect: raw.streakEffect ?? null,
   }
 }
 

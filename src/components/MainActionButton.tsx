@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { GRACE_TICKS, getIsNearTierFloor, getSurfZone, getTierFloor } from '../game/economy'
+import { GRACE_TICKS, getComboCritBonus, getIsNearTierFloor, getSurfZone, getTierFloor } from '../game/economy'
 import { playSound } from '../game/sound'
 import type { GameState } from '../game/types'
 
@@ -92,9 +92,10 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   // v0.3.2 Candle Chain state.
   const multiplier = state.comboMultiplier
   const comboActive = launched && !graduateReady && multiplier > 1
+  const comboCritBonus = getComboCritBonus(multiplier)
   // The chain is alive but you've gone quiet for a tick — one candle from a break.
   const chainAtRisk = launched && !graduateReady && state.combo > 0 && state.idleTicks >= 1
-  const zone = getSurfZone(state.surfPressure)
+  const zone = getSurfZone(state.chart.price)
 
   const label = !launched
     ? `LAUNCH ${state.currentCoin.ticker}`
@@ -119,7 +120,7 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
               : almost
                 ? 'Curve destabilizing. One more shove.'
                 : comboActive
-                  ? `${state.combo} candle chain · ${zone.label}`
+                  ? `${state.combo} candle chain · ×${multiplier.toFixed(1)} Curve Push`
                   : graceWarning
                     ? 'Chart Gravity engaging.'
                     : 'Mash to build a Candle Chain'
@@ -161,6 +162,23 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
         <span>{label}</span>
         <small>{detail}</small>
       </button>
+
+      {launched && !graduateReady ? (
+        <div className={`chain-meter ${chainAtRisk ? 'risk' : ''}`} aria-label="Candle Chain status">
+          <span>
+            <strong>CANDLE CHAIN {state.combo}</strong>
+            <small>{zone.label}</small>
+          </span>
+          <span>
+            <strong>×{multiplier.toFixed(1)}</strong>
+            <small>Curve Push</small>
+          </span>
+          <span>
+            <strong>+{Math.round(comboCritBonus * 100)}%</strong>
+            <small>Crit Chance · +18% Rescue</small>
+          </span>
+        </div>
+      ) : null}
 
       {effect ? (
         <div className={`tap-float ${crit ? 'crit' : ''}`} key={effect.id}>

@@ -267,6 +267,34 @@ h2 {
   box-shadow: var(--shadow), 0 0 0 2px rgba(70, 255, 155, 0.35), 0 0 30px rgba(70, 255, 155, 0.3);
 }
 
+.hero-chart.tap-flash .fake-chart {
+  transform: translateY(-4px);
+  transition: transform 90ms ease-out;
+}
+
+.hero-chart.crit-spike {
+  border-color: rgba(255, 194, 58, 0.9);
+  box-shadow: var(--shadow), 0 0 0 2px rgba(255, 194, 58, 0.55), 0 0 34px rgba(255, 194, 58, 0.36);
+}
+
+.hero-chart.crit-spike::before {
+  content: 'CRIT SPIKE';
+  position: absolute;
+  top: 72px;
+  left: 50%;
+  z-index: 2;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 194, 58, 0.7);
+  border-radius: 4px;
+  background: rgba(4, 6, 10, 0.74);
+  color: var(--amber);
+  font-size: 0.62rem;
+  font-weight: 1000;
+  letter-spacing: 0.08em;
+  transform: translateX(-50%);
+  animation: crit-spike-pop 420ms ease-out forwards;
+}
+
 .hero-chart.milestone-pulse {
   animation: milestone-glow 750ms ease-out;
 }
@@ -303,6 +331,11 @@ h2 {
 .hero-chart.decaying {
   border-color: rgba(255, 59, 82, 0.5);
   box-shadow: var(--shadow), inset 0 -20px 34px rgba(255, 59, 82, 0.16);
+}
+
+.hero-chart.decaying .fake-chart {
+  transform: translateY(3px);
+  transition: transform 120ms ease-in;
 }
 
 /* Status flag communicating decay ("CURVE BLEEDING") vs. held ("MILESTONE
@@ -588,6 +621,52 @@ h2 {
 
 .main-action.graduate-ready small {
   color: rgba(21, 4, 6, 0.72);
+}
+
+.chain-meter {
+  display: grid;
+  grid-template-columns: 1.15fr 0.72fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.chain-meter span {
+  min-width: 0;
+  padding: 7px 6px;
+  border: 1px solid rgba(70, 255, 155, 0.24);
+  border-radius: 7px;
+  background: rgba(70, 255, 155, 0.055);
+  text-align: center;
+}
+
+.chain-meter strong,
+.chain-meter small {
+  display: block;
+  overflow-wrap: anywhere;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.chain-meter strong {
+  color: var(--acid);
+  font-size: 0.76rem;
+  font-weight: 1000;
+}
+
+.chain-meter small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+}
+
+.chain-meter.risk span {
+  border-color: rgba(255, 194, 58, 0.46);
+  background: rgba(255, 194, 58, 0.08);
+}
+
+.chain-meter.risk strong {
+  color: var(--amber);
 }
 
 .tap-float {
@@ -1302,6 +1381,41 @@ h2 {
   text-shadow: 0 0 14px rgba(255, 194, 58, 0.7);
 }
 
+/* --- v0.3.4 Candlestick chart --- */
+/* The 45–75 Surf-Zone band: a faint green wash marking the sweet spot to ride. */
+.chart-surf-band {
+  fill: rgba(70, 255, 155, 0.05);
+}
+
+.hero-chart.surf-surf .chart-surf-band {
+  fill: rgba(70, 255, 155, 0.1);
+}
+
+/* Overheat state: overmashing washes the machine hot orange and shakes it. */
+.hero-chart.overheated {
+  border-color: rgba(255, 107, 82, 0.85);
+  box-shadow: var(--shadow), 0 0 34px rgba(255, 107, 82, 0.32), inset 0 0 30px rgba(255, 107, 82, 0.12);
+}
+
+.chart-overheat-flag {
+  position: absolute;
+  top: 44px;
+  left: 50%;
+  z-index: 3;
+  padding: 3px 8px;
+  border: 1px solid rgba(255, 107, 82, 0.8);
+  border-radius: 4px;
+  background: rgba(10, 6, 6, 0.82);
+  color: var(--red-2, #ff6b52);
+  font-size: 0.58rem;
+  font-weight: 1000;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translateX(-50%);
+  animation: warn-blink 560ms steps(1) infinite;
+}
+
 /* Small milestone-progress label prefixed on the bonding-curve rail (the zone
    label moved into the chart header). */
 .curve-rail-label {
@@ -1315,6 +1429,62 @@ h2 {
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
+}
+
+/* --- Guitar Hero-style Candle Chain burst. Non-blocking and centered near the
+   chart/button stack; the global toast remains secondary near the bottom. --- */
+.streak-burst {
+  position: fixed;
+  top: 34svh;
+  left: 50%;
+  z-index: 9;
+  display: grid;
+  gap: 3px;
+  width: min(92%, 390px);
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 194, 58, 0.72);
+  border-radius: 9px;
+  background: linear-gradient(180deg, rgba(18, 24, 38, 0.94), rgba(4, 6, 10, 0.88));
+  box-shadow: var(--shadow), 0 0 34px rgba(255, 194, 58, 0.32);
+  pointer-events: none;
+  text-align: center;
+  transform: translateX(-50%);
+  animation: streak-burst-pop 1350ms ease-out forwards;
+}
+
+.streak-burst span,
+.streak-burst small {
+  color: var(--acid-2);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.streak-burst strong {
+  color: var(--amber);
+  font-size: clamp(1.25rem, 7vw, 2.05rem);
+  font-weight: 1000;
+  line-height: 0.98;
+  text-shadow: 0 0 18px rgba(255, 194, 58, 0.72), 0 3px 16px rgba(0, 0, 0, 0.9);
+  text-transform: uppercase;
+}
+
+.streak-burst-hot,
+.streak-burst-legend {
+  border-color: rgba(70, 255, 155, 0.82);
+  box-shadow: var(--shadow), 0 0 38px rgba(70, 255, 155, 0.38);
+}
+
+.streak-burst-hot strong,
+.streak-burst-legend strong {
+  color: var(--acid-2);
+  text-shadow: 0 0 20px rgba(70, 255, 155, 0.8), 0 3px 16px rgba(0, 0, 0, 0.9);
+}
+
+.streak-burst-legend {
+  border-color: rgba(255, 255, 255, 0.82);
 }
 
 /* --- Global non-blocking toast (evidence / hire / chain celebration). --- */
@@ -1435,6 +1605,15 @@ h2 {
   font-weight: 700;
 }
 
+.upgrade-impact-next {
+  flex-basis: 100%;
+  color: var(--acid-2);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 /* --- Keyframes (first ones in this project) --- */
 
 @keyframes chain-throb {
@@ -1532,6 +1711,41 @@ h2 {
   100% {
     opacity: 1;
     transform: translate(-50%, 0);
+  }
+}
+
+@keyframes streak-burst-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10px) scale(0.86);
+    filter: brightness(1.4);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.05);
+  }
+  72% {
+    opacity: 1;
+    transform: translate(-50%, -4px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -18px) scale(0.96);
+  }
+}
+
+@keyframes crit-spike-pop {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 8px) scale(0.82);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.08);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -12px) scale(1);
   }
 }
 
@@ -1771,8 +1985,11 @@ h2 {
   .curve-rail-fill::after,
   .curve-rail.decaying .curve-rail-fill,
   .chart-gravity-flag.bleeding,
+  .chart-overheat-flag,
   .main-action::after,
-  .ticker-symbol::before {
+  .ticker-symbol::before,
+  .streak-burst,
+  .hero-chart.crit-spike::before {
     animation: none;
   }
 }

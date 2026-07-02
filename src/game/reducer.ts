@@ -23,35 +23,31 @@ import {
   COMBO_WINDOW_MS,
   COPE_CRATE_COST,
   GRACE_TICKS,
-  SURF_ACTIVE_DECAY,
-  SURF_IDLE_DECAY,
-  SURF_IDLE_FLAT,
-  SURF_IDLE_MS,
-  SURF_JEET_DAMP,
   getBondingCurveDelta,
   getBondingCurveTier,
   getCardUnlockChance,
+  getChartAutoImpulse,
+  getChartFrictionScale,
+  getChartGravityScale,
+  getChartJeetDump,
+  getChartTapImpulse,
   getClickGain,
+  getComboCritBonus,
   getComboMultiplier,
   getDecayRate,
   getHeatGain,
   getJeetLossRatio,
   getPassiveGainPerSecond,
   getPrestigeReward,
-  getSurfTapPush,
   getTierFloor,
   getTotalUpgradeLevels,
   getUpgradeCost,
 } from './economy'
-import { nextChartPoint } from './tick'
+import { advanceChart, createInitialChart, CHART_HEAT_PER_TAP, CHART_TAP_STEP } from './chart'
 import type { EventProgress, GameAction, GameState, ResourceState, ToastKind } from './types'
 import { SAVE_VERSION } from './types'
 
 const MAX_TICKER_LINES = 14
-
-const INITIAL_CHART = [
-  20, 22, 19, 24, 23, 27, 25, 29, 32, 30, 36, 34, 38, 42, 39, 44, 47, 45, 51, 49, 56, 54, 61, 58,
-]
 
 function initialResources(): ResourceState {
   return {
@@ -97,7 +93,7 @@ export function createInitialGame(): GameState {
     comboMultiplier: 1,
     lastTapAt: 0,
     maxComboThisRun: 0,
-    surfPressure: 0,
+    chart: createInitialChart(),
     upgrades: initialUpgrades(),
     cards: initialCards(),
     event: {
@@ -112,17 +108,17 @@ export function createInitialGame(): GameState {
       'Fictional satire mode armed. No wallets, no trading, no real money.',
       'Launch $EGG when ready. The basement lights are flickering.',
     ],
-    chartPoints: INITIAL_CHART,
     taps: 0,
     totalLiquidityEarned: 0,
     jeetEventsSurvived: 0,
     copeCratesOpened: 0,
-    onboardingComplete: false,
+    onboardingComplete: true,
     lastTapEffect: null,
     lastPurchaseEffect: null,
     pendingCardReveal: null,
     toast: null,
     newCardCount: 0,
+    streakEffect: null,
     majorEvent: null,
     effectSeq: 0,
   }
@@ -148,13 +144,16 @@ function addTicker(state: GameState, line: string): GameState {
   }
 }
 
-// v0.3.2: the chart line follows Surf Pressure. Call this once, after all surf
-// changes for the action, so a single point per tap/tick captures the meter.
-function pushChart(state: GameState): GameState {
-  return {
-    ...state,
-    chartPoints: nextChartPoint(state.chartPoints, state.surfPressure),
-  }
+// v0.3.4: advance the visual candle chart by `dt` seconds. Purely cosmetic —
+// never touches liquidity, the bonding curve, or the tier floors. The reducer
+// funnels every chart nudge (a tap's impulse, an idle tick's fall, a jeet dump)
+// through here so the physics live in one place (game/chart.ts).
+function advanceChartState(
+  state: GameState,
+  dt: number,
+  opts: Parameters<typeof advanceChart>[2] = {},
+): GameState {
+  return { ...state, chart: advanceChart(state.chart, dt, opts) }
 }
 
 // Single non-blocking toast slot. Each stamp overwrites the previous one, so the
@@ -164,20 +163,58 @@ function stampToast(state: GameState, kind: ToastKind, title: string, line: stri
   return { ...state, effectSeq: seq, toast: { id: seq, kind, title, line } }
 }
 
-const CHAIN_TOAST_LINES: Record<string, string> = {
-  '1.5': 'CHART SURFING',
-  '2': "JEETS CAN'T KEEP UP",
-  '3': 'GRAVITY CLOCKED OUT',
+const STREAK_REWARDS: Record<number, { title: string; line: string }> = {
+  5: { title: 'CHAIN STARTED', line: '×1.2 CURVE PUSH · SURF PRESSURE BOOSTED' },
+  10: { title: 'NICE CANDLE', line: '×1.5 CURVE PUSH · CRIT CHANCE UP' },
+  20: { title: 'SURFING THE LIE', line: '×2.0 CURVE PUSH · CRIT CHANCE UP' },
+  35: { title: "JEETS CAN'T KEEP UP", line: '×3.0 CURVE PUSH · SURF PRESSURE BOOSTED' },
+  50: { title: 'GRAVITY CLOCKED OUT', line: '×3.0 CURVE PUSH LOCKED' },
+  75: { title: 'CANDLE GOD MODE', line: 'CRIT CHANCE UP · SURF PRESSURE BOOSTED' },
+  100: { title: 'THE CHART IS LYING BEAUTIFULLY', line: '×3.0 CURVE PUSH · KEEP THE CHAIN ALIVE' },
 }
 
-function stampChainToast(state: GameState, multiplier: number): GameState {
-  const line = CHAIN_TOAST_LINES[String(multiplier)]
+function stampStreakReward(state: GameState, combo: number): GameState {
+  const reward = STREAK_REWARDS[combo]
 
-  if (!line) {
+  if (!reward) {
     return state
   }
 
-  return stampToast(state, 'chain', `CANDLE CHAIN ×${multiplier.toFixed(1)}`, line)
+  const seq = state.effectSeq + 1
+  return {
+    ...state,
+    effectSeq: seq,
+    streakEffect: { id: seq, combo, title: reward.title, line: reward.line },
+  }
+}
+
+function getUpgradeToastLine(upgradeId: string): string {
+  switch (upgradeId) {
+    case 'shill_bot':
+      return 'PASSIVE FLOW UP — keeps the lie breathing'
+    case 'micro_kol_contract':
+      return 'HYPE UP — bigger candles, louder lies'
+    case 'volume_bot_choir':
+    case 'fake_chart_printer':
+      return 'TAP POWER UP — each candle pushes harder'
+    case 'community_cope_amplifier':
+      return 'GRAVITY SLOWED — chain survives longer'
+    case 'jeet_containment_drone':
+      return 'JEET DAMAGE DOWN — dips hurt less'
+    case 'cto_revival_megaphone':
+      return 'PASSIVE FLOW UP — chart breathes while you rest'
+    case 'lawyer_token_retainer':
+      return 'HEAT DOWN — mashing stays safer'
+    case 'side_wallet_dust_collector':
+    case 'meta_rotation_radar':
+      return 'EVIDENCE ODDS UP — more receipts drop'
+    case 'bonding_curve_accelerator':
+      return 'CURVE PUSH UP — combo climbs faster'
+    case 'cabal_group_chat_invite':
+      return 'ALL GAINS UP — every fake number fattens'
+    default:
+      return 'EFFECT UP — the loop gets louder'
+  }
 }
 
 // Recomputes the bonding-curve tier and, if a tier boundary was crossed,
@@ -266,9 +303,12 @@ function unlockCard(state: GameState, seed: number): GameState {
     newCardCount: state.newCardCount + (isDuplicate ? 0 : 1),
   }
 
-  // v0.3.2: evidence surfaces as a non-blocking toast (was a full-screen modal
-  // that stopped mashing). Full card details live in the album.
-  next = stampToast(next, 'evidence', card.name, isDuplicate ? 'Duplicate receipt · +1 Copium' : 'New receipt bagged')
+  // v0.3.3: evidence stays secondary. During an active Candle Chain the badge
+  // and ticker record it, but the toast lane stays quiet so streak feedback
+  // owns the player's attention.
+  if (state.combo < 5) {
+    next = stampToast(next, 'evidence', card.name, isDuplicate ? 'Duplicate receipt · +1 Copium' : 'New receipt bagged')
+  }
 
   return addTicker(
     next,
@@ -435,7 +475,6 @@ function sendCandle(state: GameState, now: number): GameState {
   // it starts a fresh one at 1. (lastTapAt === 0 means "first tap of the run".)
   const withinWindow = state.lastTapAt > 0 && now - state.lastTapAt <= COMBO_WINDOW_MS
   const combo = withinWindow ? state.combo + 1 : 1
-  const prevMultiplier = state.comboMultiplier
   const comboMultiplier = getComboMultiplier(combo)
 
   const baseGain = getClickGain(state)
@@ -443,7 +482,7 @@ function sendCandle(state: GameState, now: number): GameState {
   // Deterministic so it stays reproducible/save-safe. v0.3: crit nudges up while
   // decaying (heroic rescue). v0.3.2: and nudges up with a hot chain, so combo
   // taps crit noticeably more — part of "combo taps feel much better".
-  const comboCritBonus = comboMultiplier >= 2 ? 0.06 : comboMultiplier >= 1.5 ? 0.03 : 0
+  const comboCritBonus = getComboCritBonus(comboMultiplier)
   const critChance = (wasDecaying ? 0.18 : 0.12) + comboCritBonus
   const isCrit = deterministicRoll(tapId * 2.71 + state.prestigeCount * 3.77) < critChance
   // Wallet gain (economy) is combo-independent — only crit scales it. Curve
@@ -451,9 +490,6 @@ function sendCandle(state: GameState, now: number): GameState {
   // without inflating upgrade income.
   const walletGain = isCrit ? baseGain * 3 : baseGain
   const curveGain = walletGain * comboMultiplier
-
-  // Surf Pressure shove, bigger the hotter the chain.
-  const surfPressure = Math.min(100, state.surfPressure + getSurfTapPush(comboMultiplier, state.surfPressure))
 
   let next: GameState = {
     ...state,
@@ -464,12 +500,22 @@ function sendCandle(state: GameState, now: number): GameState {
     comboMultiplier,
     lastTapAt: now,
     maxComboThisRun: Math.max(state.maxComboThisRun, combo),
-    surfPressure,
     resources: {
       ...state.resources,
       heat: state.resources.heat + getHeatGain(state),
     },
   }
+
+  // v0.3.4: a tap shoves the visual chart's velocity (impulse, not position) and
+  // adds chart heat. A mini physics step runs immediately so the current candle
+  // visibly reacts to this tap; the 120ms game tick keeps it alive between taps.
+  const tapImpulse = getChartTapImpulse(next, comboMultiplier, isCrit)
+  next = advanceChartState(next, CHART_TAP_STEP, {
+    impulse: tapImpulse,
+    heatAdd: CHART_HEAT_PER_TAP + (isCrit ? 4 : 0),
+    frictionScale: getChartFrictionScale(comboMultiplier),
+    gravityScale: getChartGravityScale(next),
+  })
 
   next = awardLiquidity(next, walletGain, curveGain)
 
@@ -487,10 +533,7 @@ function sendCandle(state: GameState, now: number): GameState {
     lastTapEffect: { id: tapId, gain: walletGain, microLine, crit: isCrit },
   }
 
-  // Non-blocking chain celebration when the multiplier tier steps up.
-  if (comboMultiplier > prevMultiplier) {
-    next = stampChainToast(next, comboMultiplier)
-  }
+  next = stampStreakReward(next, combo)
 
   if (next.taps % 12 === 0) {
     const loss = Math.floor(next.resources.liquidity * getJeetLossRatio(next))
@@ -501,10 +544,11 @@ function sendCandle(state: GameState, now: number): GameState {
         liquidity: Math.max(0, next.resources.liquidity - loss),
         heat: next.resources.heat + 2,
       },
-      // A jeet raid knocks the surf line down — a visible dip mid-mash.
-      surfPressure: next.surfPressure * SURF_JEET_DAMP,
       jeetEventsSurvived: next.jeetEventsSurvived + 1,
     }
+    // A jeet raid stamps a red dump candle — a visible dip mid-mash, shrunk by
+    // the Jeet Containment Drone upgrade.
+    next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: getChartJeetDump(next) })
     next = addTicker(next, `${pickLine(JEET_LINES, next.jeetEventsSurvived)} -${loss} Liquidity.`)
   }
 
@@ -515,9 +559,6 @@ function sendCandle(state: GameState, now: number): GameState {
   if (wasDecaying) {
     next = addTicker(next, pickLine(GRAVITY_RECOVERY_LINES, tapId))
   }
-
-  // Chart follows the surf meter after every surf change this tap.
-  next = pushChart(next)
 
   return syncEvent(next)
 }
@@ -552,7 +593,7 @@ function buyUpgrade(state: GameState, upgradeId: string): GameState {
   // pulse is driven by lastPurchaseEffect in the UpgradeList itself.
   const upgrade = UPGRADES.find((entry) => entry.id === upgradeId)
   const withToast = upgrade
-    ? stampToast(next, 'operator', `${upgrade.name} · Lv ${newLevel}`, 'Added to the cursed payroll.')
+    ? stampToast(next, 'operator', `${upgrade.name} · Lv ${newLevel}`, getUpgradeToastLine(upgrade.id))
     : next
 
   return syncEvent(addTicker(withToast, pickLine(UPGRADE_LINES, level + cost)))
@@ -636,45 +677,46 @@ function graduateCoin(state: GameState): GameState {
 // the *fractional* bondingCurveProgress within the current tier band, floored at
 // TIER_FLOORS[bondingCurveTier]. It never touches the tier, liquidity, cards,
 // upgrades, resources, or event progress, and never calls milestone crossing.
-function applyChartGravity(state: GameState, now: number): GameState {
-  const idleTicks = state.idleTicks + 1
+function applyChartGravity(state: GameState, now: number, dtSeconds: number): GameState {
+  const idleTicks = state.idleTicks + dtSeconds
+
+  // v0.3.4: advance the visual candle chart every tick. When the player isn't
+  // tapping, gravity + friction pull it down; passive upgrades add a gentle idle
+  // lift so the chart still "breathes" while you rest. Fully cosmetic.
+  const withChart: GameState = advanceChartState({ ...state, idleTicks }, dtSeconds, {
+    gravityScale: getChartGravityScale(state),
+    autoImpulse: getChartAutoImpulse(state),
+  })
 
   // Never drift while onboarding (the prestige/graduation modal only opens at
   // 100% where the curve floor already prevents any decay). v0.3.2: the
   // pendingCardReveal pause is gone — evidence is a non-blocking toast now, so
   // "reading time" no longer freezes the loop.
   if (!state.onboardingComplete) {
-    return { ...state, idleTicks, isDecaying: false }
+    return { ...withChart, isDecaying: false }
   }
 
-  // v0.3.2: break an idle Candle Chain, and drift Surf Pressure down every tick
-  // (proportional sawtooth). Both are cosmetic/feel — neither touches the
-  // economy or the protected curve floor.
+  // Break an idle Candle Chain (cosmetic/feel — never touches the curve floor).
   const chainBroken = state.combo > 0 && now - state.lastTapAt > COMBO_BREAK_MS
   const combo = chainBroken ? 0 : state.combo
   const comboMultiplier = chainBroken ? 1 : state.comboMultiplier
-  // Gentle decay while a tap landed recently; strong drift once idle.
-  const surfIdle = now - state.lastTapAt > SURF_IDLE_MS
-  const surfPressure = surfIdle
-    ? Math.max(0, state.surfPressure * (1 - SURF_IDLE_DECAY) - SURF_IDLE_FLAT)
-    : Math.max(0, state.surfPressure * (1 - SURF_ACTIVE_DECAY))
 
-  const drifted: GameState = { ...state, idleTicks, combo, comboMultiplier, surfPressure }
+  const drifted: GameState = { ...withChart, combo, comboMultiplier }
 
   // Grace window: recent taps buy breathing room before curve gravity engages.
   if (idleTicks < GRACE_TICKS) {
-    return pushChart({ ...drifted, isDecaying: false })
+    return { ...drifted, isDecaying: false }
   }
 
   const floor = getTierFloor(drifted.bondingCurveTier)
   const rate = getDecayRate(drifted)
   const progress = drifted.bondingCurveProgress
-  const nextProgress = Math.max(floor, progress - rate)
+  const nextProgress = Math.max(floor, progress - rate * dtSeconds)
 
   // Nothing to bleed (already at/below floor, or rate fully dampened): idle but
   // not decaying.
   if (nextProgress >= progress) {
-    return pushChart({ ...drifted, isDecaying: false })
+    return { ...drifted, isDecaying: false }
   }
 
   let next: GameState = {
@@ -692,7 +734,7 @@ function applyChartGravity(state: GameState, now: number): GameState {
       { ...next, effectSeq: seq, majorEvent: { id: seq, line: GRAVITY_FLOOR_HELD_LINE } },
       GRAVITY_FLOOR_HELD_LINE,
     )
-  } else if (idleTicks === GRACE_TICKS) {
+  } else if (state.idleTicks < GRACE_TICKS && idleTicks >= GRACE_TICKS) {
     // First decaying tick of this episode: one warning line, not a per-tick spam.
     // Hotter coins get a nastier flavor.
     const highHeat = state.resources.heat >= 120
@@ -702,18 +744,19 @@ function applyChartGravity(state: GameState, now: number): GameState {
     next = addTicker(next, line)
   }
 
-  return pushChart(next)
+  return next
 }
 
-function runTick(state: GameState, now: number): GameState {
+function runTick(state: GameState, now: number, dtSeconds = 1): GameState {
   let next = state
+  const boundedDt = Math.max(0.05, Math.min(1, dtSeconds))
 
   if (next.event.hypeBoostTicks > 0) {
     next = {
       ...next,
       event: {
         ...next.event,
-        hypeBoostTicks: Math.max(0, next.event.hypeBoostTicks - 1),
+        hypeBoostTicks: Math.max(0, next.event.hypeBoostTicks - boundedDt),
       },
     }
   }
@@ -723,7 +766,7 @@ function runTick(state: GameState, now: number): GameState {
     return next
   }
 
-  const passive = getPassiveGainPerSecond(next)
+  const passive = getPassiveGainPerSecond(next) * boundedDt
 
   if (passive > 0) {
     // Passive drives wallet + curve equally (no combo multiplier on idle income).
@@ -733,7 +776,7 @@ function runTick(state: GameState, now: number): GameState {
 
   // Chart Gravity runs every launched tick regardless of passive, so the idle
   // grace timer advances and decay can engage even with zero passive income.
-  return applyChartGravity(next, now)
+  return applyChartGravity(next, now, boundedDt)
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
@@ -749,7 +792,7 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
     case 'GRADUATE_COIN':
       return graduateCoin(state)
     case 'TICK':
-      return runTick(state, action.now)
+      return runTick(state, action.now, action.dtSeconds)
     case 'COMPLETE_ONBOARDING':
       return { ...state, onboardingComplete: true }
     case 'ACK_CARDS':

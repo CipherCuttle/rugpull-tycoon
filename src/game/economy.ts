@@ -1,5 +1,6 @@
 import { CARDS } from '../data/cards'
 import { getUpgrade, UPGRADES } from '../data/upgrades'
+import { CHART_TAP_IMPULSE_BASE } from './chart'
 import type { GameState } from './types'
 
 // v0.3.1 Economy Tuning: the amount of *curve-driving* Liquidity needed to fill
@@ -28,40 +29,16 @@ export const COPE_CRATE_COST = 4
 // --- v0.3.2 Candle Chain combo constants ---
 // A tap landing within this window (ms) of the previous one continues the chain;
 // a later tap resets it to 1. Ticks break an idle chain after COMBO_BREAK_MS.
-export const COMBO_WINDOW_MS = 900
-export const COMBO_BREAK_MS = 1200
+export const COMBO_WINDOW_MS = 850
+export const COMBO_BREAK_MS = 1000
 export const COMBO_MAX_MULTIPLIER = 3
 
-// --- v0.3.2 Surf Pressure constants (feel/visual only, not economy) ---
-// Per-tap push into the surf meter. It scales with combo, then soft-caps as the
-// meter gets hot so hard mashing can flash into Graduation Push without pinning
-// the chart at 100: raw push = BASE + mult×PER, effective push = raw×scale.
-// Decay is split so the meter reads cleanly:
-//   - while actively tapping, a gentle proportional decay gives a shallow
-//     sawtooth whose equilibrium tracks tap rate (~casual→Warming, normal→Surf,
-//     masher→Overheated/Graduation), so the zone label is informative not flickery;
-//   - once idle (no tap within SURF_IDLE_MS), a much stronger decay makes the
-//     line visibly drift down within a few seconds — "stopping causes drift".
-export const SURF_TAP_PUSH_BASE = 2.3
-export const SURF_TAP_PUSH_PER_MULT = 1.35
-export const SURF_ACTIVE_DECAY = 0.085
-export const SURF_IDLE_DECAY = 0.5
-export const SURF_IDLE_FLAT = 6
-export const SURF_IDLE_MS = 900
-// A jeet raid knocks the surf line down by a fraction of its current height (a
-// visible dip that recovers in a couple of seconds), rather than a flat amount
-// that would wipe the whole meter at this scale.
-export const SURF_JEET_DAMP = 0.8
-
-const SURF_TAP_SOFT_CAP = 140
-const SURF_TAP_MIN_SCALE = 0.2
-
 // --- v0.3 Chart Gravity constants ---
-// Idle ticks (1s each) of grace before the curve begins to decay. Tapping
-// resets the idle counter, so any active play trivially outruns gravity.
-export const GRACE_TICKS = 3
+// Idle seconds of grace before the curve begins to decay. Tapping resets the
+// counter, so any active play trivially outruns gravity.
+export const GRACE_TICKS = 1.25
 // Base decay, in curve-% per second, evaluated in the TICK loop.
-export const BASE_DECAY_PER_SEC = 0.6
+export const BASE_DECAY_PER_SEC = 0.7
 // Heat makes a coin "too hot": decay scales up with heat, capped.
 export const HEAT_DECAY_SCALE = 200
 export const HEAT_DECAY_CAP = 0.75
@@ -98,13 +75,8 @@ export function getComboMultiplier(combo: number): number {
   return 1.0
 }
 
-// Per-tap surf push, bigger the hotter your chain — this is what pushes normal
-// mashing into the Surf zone and combo mashing into Overheated/Graduation Push.
-export function getSurfTapPush(comboMultiplier: number, currentPressure = 0): number {
-  const rawPush = SURF_TAP_PUSH_BASE + comboMultiplier * SURF_TAP_PUSH_PER_MULT
-  const softCapScale = Math.max(SURF_TAP_MIN_SCALE, 1 - currentPressure / SURF_TAP_SOFT_CAP)
-
-  return rawPush * softCapScale
+export function getComboCritBonus(comboMultiplier: number): number {
+  return comboMultiplier >= 2 ? 0.06 : comboMultiplier >= 1.5 ? 0.03 : 0
 }
 
 export type SurfZone = 'dead' | 'warming' | 'surf' | 'overheated' | 'graduation'
@@ -122,9 +94,12 @@ const SURF_ZONE_LABELS: Record<SurfZone, string> = {
   graduation: 'Graduation Push',
 }
 
-export function getSurfZone(pressure: number): SurfZoneInfo {
+// v0.3.4: the zones now key off the visual chart *price* (0–100), matching the
+// design bands: 0–25 Dead, 25–45 Warming, 45–75 Surf, 75–90 Overheated, 90+
+// Graduation/Rug Pressure. The 45–75 Surf band is the sweet spot.
+export function getSurfZone(price: number): SurfZoneInfo {
   const zone: SurfZone =
-    pressure >= 84 ? 'graduation' : pressure >= 74 ? 'overheated' : pressure >= 55 ? 'surf' : pressure >= 25 ? 'warming' : 'dead'
+    price >= 90 ? 'graduation' : price >= 75 ? 'overheated' : price >= 45 ? 'surf' : price >= 25 ? 'warming' : 'dead'
 
   return { zone, label: SURF_ZONE_LABELS[zone] }
 }
@@ -323,4 +298,49 @@ export function getPrestigeReward(state: GameState) {
     rugPrestige: 1,
     receipts: Math.max(3, Math.floor(3 + getUniqueCardCount(state) / 3)),
   }
+}
+
+// --- v0.3.4 chart control: how the economy shapes the visual candle physics ---
+// All of these are feel/visual only. They make upgrades and streaks *visible* in
+// the chart's behavior without touching liquidity or the bonding curve.
+
+// Per-tap velocity impulse into the chart, shaped by the levers the player can
+// see: TAP POWER (click), HYPE, ALL GAINS, and the live Candle Chain. Crits kick
+// harder and (in the reducer) spawn a bigger wick.
+export function getChartTapImpulse(state: GameState, comboMultiplier: number, isCrit: boolean): number {
+  const tapPower = 1 + Math.min(getUpgradeEffectTotal(state, 'click') / 40, 0.9)
+  const hype = 1 + Math.min((getHypeMultiplier(state) - 1) * 0.35, 0.5)
+  const allGains = getAllGainsMultiplier(state)
+  const combo = 1 + (comboMultiplier - 1) * 0.5
+
+  const base = CHART_TAP_IMPULSE_BASE * tapPower * hype * allGains * combo
+  return isCrit ? base * 1.9 : base
+}
+
+// GRAVITY upgrade (Community Cope Amplifier) + prestige also slow how hard the
+// chart falls between taps. Reuses the curve-decay dampener so the upgrade's
+// advertised effect is felt in the toy too. <1 means gentler gravity.
+export function getChartGravityScale(state: GameState): number {
+  const dampener = Math.min(getUpgradeEffectTotal(state, 'decay'), DECAY_DAMPENER_CAP)
+  const prestigeSoften = PRESTIGE_DECAY_SOFTEN * Math.min(state.prestigeCount, 5)
+  return Math.max(0.5, 1 - dampener - prestigeSoften)
+}
+
+// A hot Candle Chain reduces chart friction so momentum persists — this is what
+// lets a sustained rhythm "surf" instead of stalling. <1 means less friction.
+export function getChartFrictionScale(comboMultiplier: number): number {
+  return Math.max(0.6, 1 - (comboMultiplier - 1) * 0.14)
+}
+
+// JEET SHIELD shrinks the red dump candle a raid produces.
+export function getChartJeetDump(state: GameState): number {
+  const shield = getUpgradeEffectTotal(state, 'jeetShield')
+  return Math.max(6, 26 * (1 - Math.min(shield, 0.8)))
+}
+
+// PASSIVE upgrades gently lift the chart while idle ("the lie breathes while you
+// rest"), scaled off the same passive income the player is buying.
+export function getChartAutoImpulse(state: GameState): number {
+  const passive = getPassiveGainPerSecond(state)
+  return passive > 0 ? Math.min(passive * 0.05, 6) : 0
 }

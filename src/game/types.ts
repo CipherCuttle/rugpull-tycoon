@@ -1,3 +1,5 @@
+import type { ChartState } from './chart'
+
 export const SAVE_VERSION = 1
 
 export type ResourceKey =
@@ -110,6 +112,13 @@ export interface MajorEvent {
   line: string
 }
 
+export interface StreakEffect {
+  id: number
+  combo: number
+  title: string
+  line: string
+}
+
 // v0.3.2 Chart Surf Combo: a single non-blocking toast slot. The reducer stamps
 // the newest toast-worthy event here (evidence found, operator hired, chain
 // tier-up); the UI shows exactly one at a time and auto-dismisses. Because each
@@ -143,17 +152,16 @@ export interface GameState {
   comboMultiplier: number
   lastTapAt: number
   maxComboThisRun: number
-  // v0.3.2 Surf Pressure: a fast 0–100 meter that rises with taps (scaled by
-  // combo) and decays every tick. It drives the oscillating chart + zones and is
-  // deliberately isolated from the economy (combo drives the curve, not surf).
-  surfPressure: number
+  // v0.3.4 Candlestick Physics: the visual-only candle chart. Fully decoupled
+  // from the economy — it reacts to taps (velocity impulse), gravity, and
+  // overheat, and drives the surf zones off its `price`. See game/chart.ts.
+  chart: ChartState
   upgrades: Record<string, number>
   cards: Record<string, number>
   event: EventState
   prestigeCount: number
   rugPrestige: number
   tickerHistory: string[]
-  chartPoints: number[]
   taps: number
   totalLiquidityEarned: number
   jeetEventsSurvived: number
@@ -167,6 +175,7 @@ export interface GameState {
   // Count of new evidence cards found since the Cards drawer was last opened,
   // surfaced as a badge. Cleared by ACK_CARDS.
   newCardCount: number
+  streakEffect: StreakEffect | null
   majorEvent: MajorEvent | null
   effectSeq: number
   lastOutcome?: string
@@ -179,7 +188,7 @@ export type GameAction =
   | { type: 'BUY_UPGRADE'; upgradeId: string }
   | { type: 'OPEN_COPE_CRATE' }
   | { type: 'GRADUATE_COIN' }
-  | { type: 'TICK'; now: number }
+  | { type: 'TICK'; now: number; dtSeconds?: number }
   | { type: 'COMPLETE_ONBOARDING' }
   | { type: 'ACK_CARDS' }
   | { type: 'RESET_SAVE' }

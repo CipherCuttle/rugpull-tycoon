@@ -29,7 +29,13 @@ export function ToastHost({ toast }: ToastHostProps) {
   const lastId = useRef<number | null>(null)
 
   useEffect(() => {
-    if (!toast || toast.id === lastId.current) {
+    if (!toast) {
+      setCurrent(null)
+      lastId.current = null
+      return
+    }
+
+    if (toast.id === lastId.current) {
       return
     }
 

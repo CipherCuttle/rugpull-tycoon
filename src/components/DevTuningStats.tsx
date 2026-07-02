@@ -90,7 +90,9 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
           <div>curve/tap (x1): {curvePerTap.toFixed(3)}%</div>
           <div>passive/sec: {passiveCurvePerSec.toFixed(3)}% curve</div>
           <div>combo: {state.combo} (x{state.comboMultiplier.toFixed(1)}) max {state.maxComboThisRun}</div>
-          <div>surf: {state.surfPressure.toFixed(1)}</div>
+          <div>
+            chart: {state.chart.price.toFixed(1)} v{state.chart.velocity.toFixed(1)} h{state.chart.heat.toFixed(0)}
+          </div>
           <div>ETA @3tps·x2: {Number.isFinite(etaSeconds) ? `${etaSeconds}s` : '—'}</div>
           <div>taps (run): {state.taps}</div>
           <div>run time: {runSeconds}s</div>

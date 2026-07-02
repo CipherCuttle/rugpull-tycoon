@@ -4,9 +4,9 @@ import { DevTuningStats } from '../components/DevTuningStats'
 import { EventPanel } from '../components/EventPanel'
 import { FakeChart } from '../components/FakeChart'
 import { MainActionButton } from '../components/MainActionButton'
-import { OnboardingOverlay } from '../components/OnboardingOverlay'
 import { PrestigeModal } from '../components/PrestigeModal'
 import { ResourceBar } from '../components/ResourceBar'
+import { StreakBurst } from '../components/StreakBurst'
 import { TickerFeed } from '../components/TickerFeed'
 import { ToastHost } from '../components/ToastHost'
 import { UpgradeList } from '../components/UpgradeList'
@@ -74,14 +74,14 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
 
       {/* 2. CENTER HERO AREA: chart + bonding curve rail merged into one card */}
       <FakeChart
-        points={state.chartPoints}
+        chart={state.chart}
         progress={state.bondingCurveProgress}
         tier={state.bondingCurveTier}
         milestoneLabel={milestoneLabel}
         tapEffect={state.lastTapEffect}
         isDecaying={state.isDecaying}
-        surfPressure={state.surfPressure}
       />
+      <StreakBurst effect={state.streakEffect} />
 
       {/* 3. MAIN ACTION AREA */}
       <MainActionButton
@@ -138,13 +138,6 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
           </button>
         </div>
       </footer>
-
-      {/* 9. Onboarding overlay */}
-      <OnboardingOverlay
-        visible={!state.onboardingComplete}
-        ticker={state.currentCoin.ticker}
-        onComplete={() => dispatch({ type: 'COMPLETE_ONBOARDING' })}
-      />
 
       {/* 5. Non-blocking toast host: evidence, hires, chain celebrations. */}
       <ToastHost toast={state.toast} />
