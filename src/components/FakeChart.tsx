@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { getTierFloor } from '../game/economy'
 import { chartPath } from '../game/tick'
 import type { TapEffect } from '../game/types'
 
@@ -8,12 +9,13 @@ interface FakeChartProps {
   tier: number
   milestoneLabel: string
   tapEffect: TapEffect | null
+  isDecaying: boolean
 }
 
 const TAP_FLASH_MS = 350
 const MILESTONE_PULSE_MS = 750
 
-export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect }: FakeChartProps) {
+export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect, isDecaying }: FakeChartProps) {
   const width = 360
   const height = 150
   const path = chartPath(points, width, height)
@@ -58,13 +60,25 @@ export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect }:
   const unstable = clamped >= 85 && clamped < 100
   const dumping = !isUp
 
+  // v0.3 Chart Gravity: a floor marker showing what the current milestone
+  // permanently protects, plus a status flag communicating decay vs. held.
+  const floor = getTierFloor(tier)
+  const atFloor = floor > 0 && clamped <= floor + 0.15 && clamped < 100
+  const gravityFlag = isDecaying
+    ? '▼ CURVE BLEEDING'
+    : atFloor
+      ? 'MILESTONE HELD'
+      : null
+  const gravityFlagKind = isDecaying ? 'bleeding' : 'held'
+
   return (
     <section
       className={`chart-panel hero-chart ${tapFlash ? 'tap-flash' : ''} ${milestonePulse ? 'milestone-pulse' : ''} ${
         dumping ? 'dumping' : ''
-      } ${unstable ? 'unstable' : ''}`}
+      } ${unstable ? 'unstable' : ''} ${isDecaying ? 'decaying' : ''}`}
       aria-label="Fake chart"
     >
+      {gravityFlag ? <span className={`chart-gravity-flag ${gravityFlagKind}`}>{gravityFlag}</span> : null}
       <div className="chart-header">
         <span>{milestoneLabel}</span>
         <strong className={isUp ? 'chart-up' : 'chart-down'}>{isUp ? 'UP ONLY' : 'DUMPING'}</strong>
@@ -81,9 +95,17 @@ export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect }:
         <line x1="0" x2={width} y1="118" y2="118" stroke="#282828" strokeDasharray="7 8" />
         <line x1="0" x2={width} y1="72" y2="72" stroke="#282828" strokeDasharray="7 8" />
       </svg>
-      <div className="curve-rail" aria-label="Bonding curve progress">
+      <div className={`curve-rail ${isDecaying ? 'decaying' : ''}`} aria-label="Bonding curve progress">
         <div className="curve-rail-track">
           <div className="curve-rail-fill" style={{ width: `${clamped}%` }} />
+          {floor > 0 ? (
+            <div
+              className="curve-rail-floor"
+              style={{ left: `${floor}%` }}
+              aria-label={`Milestone floor at ${floor}%`}
+              title={`Milestone floor: ${floor}% (gravity can't drop below this)`}
+            />
+          ) : null}
         </div>
         <strong className="curve-rail-value">{clamped.toFixed(1)}%</strong>
       </div>

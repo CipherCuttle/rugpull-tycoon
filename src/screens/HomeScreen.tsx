@@ -69,6 +69,7 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         tier={state.bondingCurveTier}
         milestoneLabel={milestoneLabel}
         tapEffect={state.lastTapEffect}
+        isDecaying={state.isDecaying}
       />
 
       {/* 3. MAIN ACTION AREA */}

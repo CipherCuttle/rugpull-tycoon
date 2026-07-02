@@ -20,6 +20,8 @@ export type UpgradeEffect =
   | 'jeetShield'
   | 'heatShield'
   | 'allGains'
+  // v0.3 Chart Gravity: dampens the idle bonding-curve decay rate.
+  | 'decay'
 
 export interface UpgradeDefinition {
   id: string
@@ -114,6 +116,12 @@ export interface GameState {
   currentCoin: CoinState
   bondingCurveProgress: number
   bondingCurveTier: number
+  // v0.3 Chart Gravity pressure loop. `idleTicks` counts ticks since the last
+  // SEND_CANDLE (reset to 0 on tap); once it exceeds the grace window the curve
+  // begins to decay toward the current tier floor. `isDecaying` is set on any
+  // tick where progress actually dropped, so the UI can react.
+  idleTicks: number
+  isDecaying: boolean
   upgrades: Record<string, number>
   cards: Record<string, number>
   event: EventState

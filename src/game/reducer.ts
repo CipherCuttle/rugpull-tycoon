@@ -5,6 +5,10 @@ import {
   CARD_LINES,
   DUPLICATE_CARD_LINES,
   EVENT_LINES,
+  GRAVITY_FLOOR_HELD_LINE,
+  GRAVITY_HIGH_HEAT_LINES,
+  GRAVITY_RECOVERY_LINES,
+  GRAVITY_START_LINES,
   JEET_LINES,
   LAUNCH_LINES,
   MICRO_LINES,
@@ -16,14 +20,17 @@ import {
 import { UPGRADES } from '../data/upgrades'
 import {
   COPE_CRATE_COST,
+  GRACE_TICKS,
   getBondingCurveDelta,
   getBondingCurveTier,
   getCardUnlockChance,
   getClickGain,
+  getDecayRate,
   getHeatGain,
   getJeetLossRatio,
   getPassiveGainPerSecond,
   getPrestigeReward,
+  getTierFloor,
   getTotalUpgradeLevels,
   getUpgradeCost,
 } from './economy'
@@ -75,6 +82,8 @@ export function createInitialGame(): GameState {
     currentCoin: { ...STARTER_COIN },
     bondingCurveProgress: 0,
     bondingCurveTier: 0,
+    idleTicks: 0,
+    isDecaying: false,
     upgrades: initialUpgrades(),
     cards: initialCards(),
     event: {
@@ -351,16 +360,27 @@ function sendCandle(state: GameState): GameState {
     return launchCoin(state)
   }
 
+  // v0.3: a tap always resets the idle timer and clears the decaying flag —
+  // returning your attention is exactly what the pressure loop rewards. Capture
+  // whether we were mid-decay first, so the rescue tap can crit harder and fire
+  // a recovery line.
+  const wasDecaying = state.isDecaying
+
   const tapId = state.taps + 1
   const baseGain = getClickGain(state)
   // v0.2 juice: ~1-in-8 taps land a "critical candle" for a chunkier payout
   // and a louder visual. Deterministic so it stays reproducible/save-safe.
-  const isCrit = deterministicRoll(tapId * 2.71 + state.prestigeCount * 3.77) < 0.12
+  // v0.3: crit chance nudges up while actively decaying so a rescue burst feels
+  // heroic (still deterministic — driven by the stored isDecaying flag).
+  const critChance = wasDecaying ? 0.18 : 0.12
+  const isCrit = deterministicRoll(tapId * 2.71 + state.prestigeCount * 3.77) < critChance
   const gain = isCrit ? baseGain * 3 : baseGain
 
   let next: GameState = {
     ...state,
     taps: tapId,
+    idleTicks: 0,
+    isDecaying: false,
     resources: {
       ...state.resources,
       heat: state.resources.heat + getHeatGain(state),
@@ -394,6 +414,12 @@ function sendCandle(state: GameState): GameState {
   }
 
   next = maybeUnlockTapCard(next)
+
+  // v0.3: reward the rescue. The first tap that breaks an active decay gets a
+  // brief "chart stabilizing" line so recovering feels good.
+  if (wasDecaying) {
+    next = addTicker(next, pickLine(GRAVITY_RECOVERY_LINES, tapId))
+  }
 
   return syncEvent(next)
 }
@@ -499,6 +525,70 @@ function graduateCoin(state: GameState): GameState {
   return syncEvent(next)
 }
 
+// v0.3 Chart Gravity. Applied once per tick AFTER passive income, so passive
+// curve gain naturally offsets decay (an idle player with strong passive stalls
+// rather than bleeds). The golden safeguard lives here: decay only ever lowers
+// the *fractional* bondingCurveProgress within the current tier band, floored at
+// TIER_FLOORS[bondingCurveTier]. It never touches the tier, liquidity, cards,
+// upgrades, resources, or event progress, and never calls milestone crossing.
+function applyChartGravity(state: GameState): GameState {
+  const idleTicks = state.idleTicks + 1
+
+  // Never decay while onboarding, or while a card-reveal modal is pending
+  // (reading time is not idle time). The prestige/graduation modal only opens at
+  // 100% where the floor already prevents any decay, so no extra flag is needed.
+  if (!state.onboardingComplete || state.pendingCardReveal !== null) {
+    return { ...state, idleTicks, isDecaying: false }
+  }
+
+  // Grace window: recent taps buy breathing room before gravity engages.
+  if (idleTicks < GRACE_TICKS) {
+    return { ...state, idleTicks, isDecaying: false }
+  }
+
+  const floor = getTierFloor(state.bondingCurveTier)
+  const rate = getDecayRate(state)
+  const progress = state.bondingCurveProgress
+  const nextProgress = Math.max(floor, progress - rate)
+
+  // Nothing to bleed (already at/below floor, or rate fully dampened): idle but
+  // not decaying.
+  if (nextProgress >= progress) {
+    return { ...state, idleTicks, isDecaying: false }
+  }
+
+  let next: GameState = {
+    ...state,
+    idleTicks,
+    bondingCurveProgress: nextProgress,
+    isDecaying: true,
+  }
+
+  // Sag the fake chart line on decaying ticks so the visual follows the number.
+  next = updateChart(next, -1.5)
+
+  if (nextProgress === floor) {
+    // Decay just landed exactly on the tier floor and stops. Announce once —
+    // this only fires on the single tick that hits the floor (subsequent ticks
+    // see nextProgress >= progress and bail above).
+    const seq = next.effectSeq + 1
+    next = addTicker(
+      { ...next, effectSeq: seq, majorEvent: { id: seq, line: GRAVITY_FLOOR_HELD_LINE } },
+      GRAVITY_FLOOR_HELD_LINE,
+    )
+  } else if (idleTicks === GRACE_TICKS) {
+    // First decaying tick of this episode: one warning line, not a per-tick spam.
+    // Hotter coins get a nastier flavor.
+    const highHeat = state.resources.heat >= 120
+    const line = highHeat
+      ? pickLine(GRAVITY_HIGH_HEAT_LINES, idleTicks + Math.floor(state.resources.heat))
+      : pickLine(GRAVITY_START_LINES, idleTicks + state.bondingCurveTier)
+    next = addTicker(next, line)
+  }
+
+  return next
+}
+
 function runTick(state: GameState): GameState {
   let next = state
 
@@ -512,18 +602,21 @@ function runTick(state: GameState): GameState {
     }
   }
 
+  // No decay before the coin is launched.
   if (!next.currentCoin.launched) {
     return next
   }
 
   const passive = getPassiveGainPerSecond(next)
 
-  if (passive <= 0) {
-    return next
+  if (passive > 0) {
+    next = awardLiquidity(next, passive, 1.4)
+    next = syncEvent(next)
   }
 
-  next = awardLiquidity(next, passive, 1.4)
-  return syncEvent(next)
+  // Chart Gravity runs every launched tick regardless of passive, so the idle
+  // grace timer advances and decay can engage even with zero passive income.
+  return applyChartGravity(next)
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {

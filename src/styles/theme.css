@@ -299,6 +299,41 @@ h2 {
   animation: warn-blink 700ms steps(1) infinite;
 }
 
+/* v0.3 Chart Gravity: decaying washes the machine warning-red and drifts down. */
+.hero-chart.decaying {
+  border-color: rgba(255, 59, 82, 0.5);
+  box-shadow: var(--shadow), inset 0 -20px 34px rgba(255, 59, 82, 0.16);
+}
+
+/* Status flag communicating decay ("CURVE BLEEDING") vs. held ("MILESTONE
+   HELD"). Sits under the header, opposite the unstable badge, so both can show
+   near graduation without overlapping. */
+.chart-gravity-flag {
+  position: absolute;
+  top: 46px;
+  left: 10px;
+  z-index: 2;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.chart-gravity-flag.bleeding {
+  border: 1px solid rgba(255, 59, 82, 0.6);
+  background: rgba(255, 59, 82, 0.14);
+  color: var(--red);
+  animation: gravity-flag-blink 620ms steps(1) infinite;
+}
+
+.chart-gravity-flag.held {
+  border: 1px solid rgba(70, 255, 155, 0.55);
+  background: rgba(70, 255, 155, 0.12);
+  color: var(--acid);
+}
+
 .chart-header {
   padding: 10px 12px 0;
 }
@@ -394,6 +429,30 @@ h2 {
   animation: rail-shine 2.6s ease-in-out infinite;
 }
 
+/* v0.3: a permanent floor tick-mark showing what the current milestone
+   protects — gravity can never drop the fill below this line. */
+.curve-rail-floor {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  transform: translateX(-1px);
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+  pointer-events: none;
+}
+
+/* While decaying, the fill loses its confident shine and pulses red so the
+   downward drift reads clearly. */
+.curve-rail.decaying .curve-rail-fill {
+  animation: gravity-flag-blink 620ms ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(255, 59, 82, 0.55);
+}
+
+.curve-rail.decaying .curve-rail-fill::after {
+  animation: none;
+}
+
 .curve-rail-value {
   flex: 0 0 auto;
   color: var(--acid);
@@ -476,6 +535,40 @@ h2 {
     0 9px 0 #7a1420,
     0 20px 50px rgba(255, 59, 82, 0.4);
   animation: graduate-beckon 900ms ease-in-out infinite;
+}
+
+/* v0.3 Chart Gravity — the button reacts to decay pressure. */
+.main-action.decaying {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 55%),
+    linear-gradient(135deg, var(--amber), var(--red) 70%);
+  box-shadow:
+    0 9px 0 #7a1420,
+    0 18px 40px rgba(255, 59, 82, 0.34);
+  animation: button-decay 620ms ease-in-out infinite;
+}
+
+/* Panic: near a tier floor or near graduation while bleeding — hardest warning. */
+.main-action.panic {
+  color: #fff2f2;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 50%),
+    linear-gradient(135deg, var(--red), #ff6b3b);
+  box-shadow:
+    0 9px 0 #7a1420,
+    0 0 0 2px rgba(255, 59, 82, 0.55),
+    0 18px 46px rgba(255, 59, 82, 0.5);
+  animation: button-panic 300ms ease-in-out infinite;
+}
+
+.main-action.decaying small,
+.main-action.panic small {
+  color: rgba(255, 240, 240, 0.9);
+}
+
+/* Recovering: brief green confirmation the moment a decay is broken by a tap. */
+.main-action.recovering {
+  animation: button-recover 520ms ease-out;
 }
 
 .main-action span {
@@ -1335,6 +1428,54 @@ h2 {
   }
 }
 
+/* v0.3 Chart Gravity button animations. */
+@keyframes button-decay {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(2px) scale(0.995);
+  }
+}
+
+@keyframes button-panic {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes button-recover {
+  0% {
+    box-shadow:
+      0 9px 0 #1c5c34,
+      0 0 0 3px rgba(70, 255, 155, 0.7),
+      0 18px 40px rgba(70, 255, 155, 0.5);
+  }
+  100% {
+    box-shadow:
+      0 9px 0 #1c5c34,
+      0 20px 44px rgba(70, 255, 155, 0.28);
+  }
+}
+
+@keyframes gravity-flag-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
 @keyframes float-up-crit {
   0% {
     opacity: 0;
@@ -1369,9 +1510,13 @@ h2 {
   .main-action,
   .main-action.graduate-ready,
   .main-action.almost,
+  .main-action.decaying,
+  .main-action.panic,
   .hero-chart.unstable,
   .fake-chart .chart-fill,
   .curve-rail-fill::after,
+  .curve-rail.decaying .curve-rail-fill,
+  .chart-gravity-flag.bleeding,
   .main-action::after,
   .ticker-symbol::before {
     animation: none;

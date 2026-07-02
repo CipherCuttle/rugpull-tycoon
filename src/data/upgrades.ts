@@ -76,9 +76,11 @@ export const UPGRADES: UpgradeDefinition[] = [
     name: 'Community Cope Amplifier',
     baseCost: 1700,
     scaling: 1.32,
-    effect: 'hype',
-    effectValue: 0.12,
-    description: 'Turns panic into thread engagement.',
+    // v0.3: repurposed into the Chart Gravity dampener. Cope literally keeps
+    // the hallucination breathing, slowing how fast the curve bleeds when idle.
+    effect: 'decay',
+    effectValue: 0.06,
+    description: 'Cope keeps the chart breathing. Slows Chart Gravity when you stop tapping.',
     iconPrompt: 'patched speaker blasting speech bubbles marked cope',
   },
   {
@@ -108,7 +110,7 @@ export const UPGRADES: UpgradeDefinition[] = [
     scaling: 1.38,
     effect: 'passive',
     effectValue: 6,
-    description: 'Declares the community alive after every visible collapse.',
+    description: 'Declares the community alive after every collapse. Strong passive keeps the curve fighting gravity while you rest.',
     iconPrompt: 'battered megaphone labeled CTO NOW 87 PERCENT COPE',
   },
   {

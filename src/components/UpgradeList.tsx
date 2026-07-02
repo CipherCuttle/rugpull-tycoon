@@ -36,6 +36,8 @@ function effectLabel(upgrade: UpgradeDefinition): string {
       return `-${Math.round(upgrade.effectValue * 100)}% heat`
     case 'allGains':
       return `+${Math.round(upgrade.effectValue * 100)}% all gains`
+    case 'decay':
+      return `-${upgrade.effectValue.toFixed(2)} gravity/sec`
     default:
       return 'boost'
   }

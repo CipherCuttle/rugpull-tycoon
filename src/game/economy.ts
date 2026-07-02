@@ -5,6 +5,26 @@ import type { GameState } from './types'
 export const BONDING_CURVE_TARGET_LIQUIDITY = 1000
 export const COPE_CRATE_COST = 4
 
+// --- v0.3 Chart Gravity constants ---
+// Idle ticks (1s each) of grace before the curve begins to decay. Tapping
+// resets the idle counter, so any active play trivially outruns gravity.
+export const GRACE_TICKS = 3
+// Base decay, in curve-% per second, evaluated in the TICK loop.
+export const BASE_DECAY_PER_SEC = 0.6
+// Heat makes a coin "too hot": decay scales up with heat, capped.
+export const HEAT_DECAY_SCALE = 200
+export const HEAT_DECAY_CAP = 0.75
+// Total decay dampening from `decay` upgrades is clamped here.
+export const DECAY_DAMPENER_CAP = 0.45
+// Prestige softens decay so later runs feel faster (capped at 5 prestiges).
+export const PRESTIGE_DECAY_SOFTEN = 0.03
+// One-way milestone floors: progress can decay within a band but never below
+// the floor of the tier already earned. Index = bondingCurveTier.
+export const TIER_FLOORS = [0, 25, 50, 75, 100]
+// How close (in curve-%) to the current floor counts as "near the floor" for
+// the panic UI while decaying.
+export const NEAR_FLOOR_MARGIN = 3
+
 export function getBondingCurveTier(progress: number): number {
   if (progress >= 100) {
     return 4
@@ -23,6 +43,35 @@ export function getBondingCurveTier(progress: number): number {
   }
 
   return 0
+}
+
+export function getTierFloor(tier: number): number {
+  return TIER_FLOORS[Math.max(0, Math.min(TIER_FLOORS.length - 1, tier))] ?? 0
+}
+
+// Chart Gravity decay rate in curve-% per second for the current state:
+//   base × heat scaling − upgrade dampeners − prestige softener, clamped ≥ 0.
+// This is the *raw* rate; passive curve gain naturally offsets it in the tick
+// (passive is awarded before decay is applied), so idle players with strong
+// passive stall rather than bleed.
+export function getDecayRate(state: GameState): number {
+  const heatScale = 1 + Math.min(state.resources.heat / HEAT_DECAY_SCALE, HEAT_DECAY_CAP)
+  const dampener = Math.min(getUpgradeEffectTotal(state, 'decay'), DECAY_DAMPENER_CAP)
+  const prestigeSoften = PRESTIGE_DECAY_SOFTEN * Math.min(state.prestigeCount, 5)
+
+  return Math.max(0, BASE_DECAY_PER_SEC * heatScale - dampener - prestigeSoften)
+}
+
+// True when progress is sitting within NEAR_FLOOR_MARGIN above the current
+// tier floor (and not already graduated). Used to escalate the button copy to
+// "one candle from the floor" tension — the floor still can't be breached.
+export function getIsNearTierFloor(state: GameState): boolean {
+  if (state.bondingCurveTier >= TIER_FLOORS.length - 1) {
+    return false
+  }
+
+  const floor = getTierFloor(state.bondingCurveTier)
+  return state.bondingCurveProgress > floor && state.bondingCurveProgress <= floor + NEAR_FLOOR_MARGIN
 }
 
 export function getUpgradeLevel(state: GameState, upgradeId: string) {

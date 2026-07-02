@@ -60,6 +60,28 @@ export const MICRO_LINES = [
   'someone bought the top',
 ]
 
+// v0.3 Chart Gravity microcopy. Kept short; the reducer fires these only on
+// meaningful state changes (decay starting, floor held, recovery) — never every
+// tick — to avoid spamming the feed.
+export const GRAVITY_START_LINES = [
+  'GRAVITY IS REMEMBERING.',
+  'THE CURVE IS BLEEDING. Send a candle.',
+  'The chart misses your attention.',
+]
+
+export const GRAVITY_HIGH_HEAT_LINES = [
+  'JEETS SMELL WEAKNESS. The curve is too hot to sit still.',
+  'High heat, low attention. Gravity is feasting.',
+]
+
+export const GRAVITY_FLOOR_HELD_LINE =
+  "MILESTONE HELD. GRAVITY CAN'T STEAL WHAT YOU ALREADY EARNED."
+
+export const GRAVITY_RECOVERY_LINES = [
+  "CHART STABILIZING. IT FORGIVES, IT DOESN'T FORGET.",
+  'Back on track. The jeets pretend they never doubted you.',
+]
+
 export const MILESTONE_LINES: Record<number, string> = {
   1: '25% — Jeets noticed. This is either bullish or terminal.',
   2: '50% — KOLs circling. Hide the good snacks.',

@@ -31,6 +31,12 @@ function looksLikeGameState(value: unknown): value is GameState {
 // defaults for those saves. onboardingComplete is deliberately forced to
 // `true` here (never `false`) so returning players never see onboarding
 // replayed — only a brand-new createInitialGame() defaults it to `false`.
+//
+// SAVE_VERSION is intentionally NOT bumped for the v0.3 Chart Gravity fields:
+// looksLikeGameState() gates loading on `saveVersion === SAVE_VERSION`, so a
+// bump would make every existing v1 save fail validation and be silently
+// discarded into a fresh game — the opposite of preserving compatibility. The
+// new fields are additive and default cleanly below, so no bump is needed.
 function migrateGameState(value: GameState): GameState {
   const raw = value as Partial<GameState>
   const hadOnboardingField = typeof raw.onboardingComplete === 'boolean'
@@ -44,6 +50,11 @@ function migrateGameState(value: GameState): GameState {
     pendingCardReveal: raw.pendingCardReveal ?? null,
     majorEvent: raw.majorEvent ?? null,
     effectSeq: raw.effectSeq ?? 0,
+    // v0.3 Chart Gravity fields. Purely additive: an old save simply starts a
+    // fresh grace window (idle 0, not decaying) on next load. See note above on
+    // why SAVE_VERSION is NOT bumped for this.
+    idleTicks: raw.idleTicks ?? 0,
+    isDecaying: raw.isDecaying ?? false,
   }
 }
 
