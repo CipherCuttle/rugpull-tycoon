@@ -106,8 +106,11 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
             resistance: {state.resistance.price.toFixed(1)} d{resistanceDistance.toFixed(1)} w{Math.round(windowMs)}ms
           </div>
           <div>
-            rating preview: {tapPreview} · streak {state.resistance.breakoutStreak} · perfect{' '}
-            {state.resistance.perfectBreakouts} · rejected {state.resistance.rejections}
+            phase: {state.resistance.phase} · last {state.resistance.lastRating ?? '—'} · preview {tapPreview}
+          </div>
+          <div>
+            streak {state.resistance.breakoutStreak} · perfect {state.resistance.perfectBreakouts} · rejected{' '}
+            {state.resistance.rejections}
           </div>
           <div>ETA @3tps·x2: {Number.isFinite(etaSeconds) ? `${etaSeconds}s` : '—'}</div>
           <div>taps (run): {state.taps}</div>

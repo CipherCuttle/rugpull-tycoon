@@ -7,7 +7,7 @@
 // Everything here is deterministic (seeded noise), so the headless pacing sim
 // can drive it reproducibly.
 
-import type { ResistanceState, TapRating } from './types'
+import type { ResistancePhase, ResistanceState, TapRating } from './types'
 
 export interface Candle {
   open: number
@@ -83,13 +83,34 @@ export const CHART_HEAT_PER_TAP = 6
 // Mini physics step run on each tap for instant on-screen feedback.
 export const CHART_TAP_STEP = 0.05
 
-// --- v0.4 Resistance Breakout visual target ---
-export const RESISTANCE_WINDOW_MS = 280
+// --- v0.4 / v0.4A Resistance Breakout arcade target ---
+// Smash window length (ms). While it is open the panel/button scream "SMASH NOW"
+// and any tap breaks the line.
+export const RESISTANCE_WINDOW_MS = 320
+// How fast a live line drifts down toward a chart stalled below it, keeping the
+// target reachable instead of parked out of reach.
 export const RESISTANCE_DRIFT_PER_SEC = 2
-export const RESISTANCE_NEAR_BAND = 3
+// The chart must climb into this band below the line for the smash window to open.
+export const RESISTANCE_NEAR_BAND = 7
+// Distance bands for rating a breakout tap (line price − chart price).
 export const RESISTANCE_PERFECT_BELOW = 4
 export const RESISTANCE_PERFECT_ABOVE = 6
 export const RESISTANCE_GOOD_BELOW = 18
+// Within this distance below the line, the panel/button flip to "approaching".
+export const RESISTANCE_APPROACH_BAND = 16
+// Transient event beats: how long broken/rejected/overheated hold before the next
+// target spawns.
+export const RESISTANCE_BROKEN_HOLD_MS = 620
+export const RESISTANCE_REJECTED_HOLD_MS = 760
+export const RESISTANCE_OVERHEAT_HOLD_MS = 560
+// Anti-pin: the chart sitting above the line this long without a clean break is
+// force-rejected, so it can never ride the line up into the ceiling. Shorter than
+// the slowest tap cadence would keep a line alive, so continuous play (which
+// breaks each line on crossing) never trips it — only coasting/abandoning does.
+export const RESISTANCE_STALE_ABOVE_MS = 700
+// The chart crashing this far below the line respawns a nearer target instead of
+// waiting for the slow drift to catch up.
+export const RESISTANCE_FAR_BELOW = 34
 
 function roll(seed: number): number {
   const value = Math.sin(seed * 127.11) * 43758.5453
@@ -104,22 +125,52 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value))
 }
 
+// Spawn the next line in a readable mid/high band above the chart. Deliberately
+// clamped well below the ceiling (max 80) so chained breakouts never march the
+// target up to a permanent top-line.
 function resistanceSpawnPrice(anchorPrice: number, id: number): number {
-  const spacing = 12 + roll(id * 17.19 + anchorPrice * 0.37) * 6
-  return round(clamp(anchorPrice + spacing, 42, 90))
+  const spacing = 11 + roll(id * 17.19 + anchorPrice * 0.37) * 6
+  return round(clamp(anchorPrice + spacing, 40, 80))
 }
 
 export function createInitialResistance(anchorPrice: number, id = 1): ResistanceState {
+  const price = resistanceSpawnPrice(anchorPrice, id)
   return {
     id,
-    price: resistanceSpawnPrice(anchorPrice, id),
+    price,
     crossedAt: 0,
     windowUntil: 0,
     lastResistanceHitAt: 0,
     breakoutStreak: 0,
     perfectBreakouts: 0,
     rejections: 0,
+    phase: anchorPrice >= price - RESISTANCE_APPROACH_BAND ? 'approaching' : 'waiting',
+    phaseUntil: 0,
+    aboveSinceMs: 0,
+    lastRating: null,
   }
+}
+
+// Spawn the successor target after a break/reject beat, carrying the run-long
+// tallies (streak/perfect/rejections) and the last rating forward.
+function respawnResistance(prev: ResistanceState, chart: ChartState): ResistanceState {
+  const fresh = createInitialResistance(chart.price, prev.id + 1)
+  return {
+    ...fresh,
+    lastResistanceHitAt: prev.lastResistanceHitAt,
+    breakoutStreak: prev.breakoutStreak,
+    perfectBreakouts: prev.perfectBreakouts,
+    rejections: prev.rejections,
+    lastRating: prev.lastRating,
+  }
+}
+
+// Live-target phase from the current gap to the line (line − chart).
+function derivePhase(distance: number, windowActive: boolean): ResistancePhase {
+  if (windowActive) {
+    return 'smash'
+  }
+  return distance <= RESISTANCE_APPROACH_BAND ? 'approaching' : 'waiting'
 }
 
 export function advanceResistance(
@@ -128,41 +179,75 @@ export function advanceResistance(
   dt: number,
   now: number,
 ): ResistanceState {
-  const windowActive = resistance.windowUntil > now
-  const expiredWindow = resistance.windowUntil > 0 && !windowActive
-  const driftFloor = Math.min(90, Math.max(42, chart.price + 9))
+  // Transient event beat (broken / rejected / overheated): freeze the target in
+  // place so the shatter/rejection visuals sit still, then respawn once the beat
+  // is over.
+  if (resistance.phase === 'broken' || resistance.phase === 'rejected' || resistance.phase === 'overheated') {
+    if (now > 0 && now >= resistance.phaseUntil) {
+      return respawnResistance(resistance, chart)
+    }
+    return resistance
+  }
+
+  // Chart crashed far below the line (e.g. a jeet dump): bring a nearer target
+  // down rather than waiting on the slow drift.
+  if (now > 0 && chart.price < resistance.price - RESISTANCE_FAR_BELOW) {
+    return respawnResistance(resistance, chart)
+  }
+
+  // A live line drifts down toward a chart stalled below it so it stays reachable.
+  const driftFloor = Math.min(80, Math.max(40, chart.price + 9))
   const driftedPrice =
     chart.price < resistance.price - 5 ? Math.max(driftFloor, resistance.price - RESISTANCE_DRIFT_PER_SEC * dt) : resistance.price
+  const price = round(driftedPrice)
+  const distance = price - chart.price
 
-  let next: ResistanceState = {
-    ...resistance,
-    price: round(driftedPrice),
-    crossedAt: expiredWindow ? 0 : resistance.crossedAt,
-    windowUntil: expiredWindow ? 0 : resistance.windowUntil,
+  // Anti-pin: track how long the chart has floated above the line without a clean
+  // break. Past the stale window, force a rejection so it drops back into range.
+  let aboveSinceMs = resistance.aboveSinceMs
+  if (chart.price > price + 1) {
+    if (aboveSinceMs === 0 && now > 0) {
+      aboveSinceMs = now
+    }
+  } else {
+    aboveSinceMs = 0
   }
-
-  const distance = next.price - chart.price
-  const shouldRetarget = !windowActive && (chart.price > next.price + 9 || chart.price < next.price - 34)
-
-  if (shouldRetarget) {
+  if (now > 0 && aboveSinceMs > 0 && now - aboveSinceMs >= RESISTANCE_STALE_ABOVE_MS) {
     return {
-      ...createInitialResistance(chart.price, next.id + 1),
-      lastResistanceHitAt: next.lastResistanceHitAt,
-      breakoutStreak: next.breakoutStreak,
-      perfectBreakouts: next.perfectBreakouts,
-      rejections: next.rejections,
+      ...resistance,
+      price,
+      windowUntil: 0,
+      crossedAt: 0,
+      phase: 'rejected',
+      phaseUntil: now + RESISTANCE_REJECTED_HOLD_MS,
+      rejections: resistance.rejections + 1,
+      breakoutStreak: 0,
+      lastRating: 'rejected',
+      aboveSinceMs: 0,
     }
   }
 
-  if (now > 0 && next.windowUntil === 0 && distance <= RESISTANCE_NEAR_BAND && distance >= -RESISTANCE_PERFECT_ABOVE) {
-    next = {
-      ...next,
-      crossedAt: now,
-      windowUntil: now + RESISTANCE_WINDOW_MS,
-    }
+  // Smash window: opens as the chart climbs into the near band, expires on its own.
+  const windowActive = resistance.windowUntil > now
+  const expiredWindow = resistance.windowUntil > 0 && !windowActive
+  let windowUntil = expiredWindow ? 0 : resistance.windowUntil
+  let crossedAt = expiredWindow ? 0 : resistance.crossedAt
+
+  if (now > 0 && windowUntil === 0 && distance <= RESISTANCE_NEAR_BAND && distance >= -RESISTANCE_PERFECT_ABOVE) {
+    crossedAt = now
+    windowUntil = now + RESISTANCE_WINDOW_MS
   }
 
-  return next
+  const nowWindowActive = windowUntil > now
+
+  return {
+    ...resistance,
+    price,
+    windowUntil,
+    crossedAt,
+    phase: derivePhase(distance, nowWindowActive),
+    aboveSinceMs,
+  }
 }
 
 export function classifyTapRating(
@@ -191,6 +276,48 @@ export function classifyTapRating(
   }
 
   return 'rejected'
+}
+
+// v0.4A: resolve what a single tap did to the resistance, read AFTER the tap's
+// chart impulse has been applied (so a tap that opens the smash window counts as a
+// break). Deliberately forgiving — the punishing paths are overheat and the
+// anti-pin stale rejection, not a slightly mistimed tap.
+export type BreakoutOutcome = 'breakout-perfect' | 'breakout-good' | 'rejected' | 'overheated' | 'weak' | 'none'
+
+export function resolveBreakoutTap(
+  resistance: ResistanceState,
+  chart: ChartState,
+  now: number,
+  overheated: boolean,
+): BreakoutOutcome {
+  // A frozen event beat already resolved this cycle — a tap mid-shatter is a no-op.
+  if (resistance.phase === 'broken' || resistance.phase === 'rejected') {
+    return 'none'
+  }
+
+  if (overheated) {
+    return 'overheated'
+  }
+
+  const distance = resistance.price - chart.price
+  const windowActive = resistance.windowUntil > now
+
+  if (windowActive) {
+    return distance <= RESISTANCE_PERFECT_BELOW && distance >= -RESISTANCE_PERFECT_ABOVE ? 'breakout-perfect' : 'breakout-good'
+  }
+
+  // No open window but the chart has just crossed above the line: a late-but-real
+  // push still breaks it (lenient — the window only gates the PERFECT rating).
+  if (distance < 0 && distance > -RESISTANCE_GOOD_BELOW) {
+    return 'breakout-good'
+  }
+
+  // Floating well above the line with no engagement: a genuine rejection.
+  if (distance <= -RESISTANCE_GOOD_BELOW) {
+    return 'rejected'
+  }
+
+  return 'weak'
 }
 
 export interface ChartAdvanceOpts {

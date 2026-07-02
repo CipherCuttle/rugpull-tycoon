@@ -61,10 +61,15 @@ import {
   advanceResistance,
   createInitialChart,
   createInitialResistance,
+  resolveBreakoutTap,
   CHART_HEAT_PER_TAP,
   CHART_TAP_STEP,
+  OVERHEAT,
+  RESISTANCE_BROKEN_HOLD_MS,
+  RESISTANCE_OVERHEAT_HOLD_MS,
+  RESISTANCE_REJECTED_HOLD_MS,
 } from './chart'
-import type { EventProgress, FountainKind, GameAction, GameState, ResourceState, ToastKind } from './types'
+import type { EventProgress, FountainKind, GameAction, GameState, ResourceState, TapRating, ToastKind } from './types'
 import { SAVE_VERSION } from './types'
 
 const MAX_TICKER_LINES = 14
@@ -362,10 +367,12 @@ function unlockCard(state: GameState, seed: number): GameState {
     newCardCount: state.newCardCount + (isDuplicate ? 0 : 1),
   }
 
-  // v0.3.3: evidence stays secondary. During an active Candle Chain the badge
-  // and ticker record it, but the toast lane stays quiet so streak feedback
-  // owns the player's attention.
-  if (state.combo < 5) {
+  // v0.3.3 / v0.4A: evidence stays secondary. During an active Candle Chain OR any
+  // live Resistance sequence (anything past the calm 'waiting' phase) the badge and
+  // ticker record it, but the toast lane stays quiet so breakout/streak feedback
+  // owns the player's attention. The Cards-tab badge (newCardCount) still counts.
+  const resistanceActive = state.resistance.phase !== 'waiting'
+  if (state.combo < 5 && !resistanceActive) {
     next = stampToast(next, 'evidence', card.name, isDuplicate ? 'Duplicate receipt · +1 Copium' : 'New receipt bagged')
   }
 
@@ -518,6 +525,105 @@ function launchCoin(state: GameState): GameState {
   )
 }
 
+// v0.4A: a breakout's small curve reward, as a fraction of the tap's wallet gain.
+// Deliberately modest so chaining breakouts feels earned without collapsing the
+// 2–4 min graduation pacing (verified via the headless sim).
+const BREAKOUT_CURVE_BONUS_PERFECT = 0.7
+const BREAKOUT_CURVE_BONUS_GOOD = 0.35
+
+// v0.4A Resistance Breakout. Read AFTER the tap's chart impulse has landed and
+// classify what it did to the line, then stamp the matching arcade event beat
+// (broken / rejected / overheated) plus its chart impulse and combat text. Returns
+// the tap rating so the caller can carry it into lastTapEffect for the chart flash.
+function resolveResistanceTap(
+  state: GameState,
+  now: number,
+  walletGain: number,
+  isOverdrive: boolean,
+): { next: GameState; rating: TapRating | null } {
+  const overheated = state.chart.heat > OVERHEAT && !isOverdrive
+  const outcome = resolveBreakoutTap(state.resistance, state.chart, now, overheated)
+
+  if (outcome === 'breakout-perfect' || outcome === 'breakout-good') {
+    const perfect = outcome === 'breakout-perfect'
+    const streak = state.resistance.breakoutStreak + 1
+    let next: GameState = {
+      ...state,
+      resistance: {
+        ...state.resistance,
+        phase: 'broken',
+        phaseUntil: now + RESISTANCE_BROKEN_HOLD_MS,
+        windowUntil: 0,
+        crossedAt: 0,
+        breakoutStreak: streak,
+        perfectBreakouts: state.resistance.perfectBreakouts + (perfect ? 1 : 0),
+        lastResistanceHitAt: now,
+        lastRating: perfect ? 'perfect' : 'good',
+        aboveSinceMs: 0,
+      },
+    }
+    // Breakout pop: a punchy upward impulse through where the line was. The target
+    // is already frozen ('broken'), so this extra step won't reopen a window.
+    next = advanceChartState(next, CHART_TAP_STEP, { impulse: perfect ? 9 : 6.5, frictionScale: 0.7 }, now)
+    const bonusCurve = walletGain * (perfect ? BREAKOUT_CURVE_BONUS_PERFECT : BREAKOUT_CURVE_BONUS_GOOD)
+    next = awardLiquidity(next, 0, bonusCurve)
+    next = pushFountain(next, perfect ? 'BREAKOUT PERFECT' : 'GOOD BREAKOUT', 'breakout')
+    if (streak >= 2) {
+      next = pushFountain(next, `CHAIN ×${streak}`, 'chain')
+    }
+    return { next, rating: perfect ? 'perfect' : 'good' }
+  }
+
+  if (outcome === 'overheated') {
+    // Overmash: purely a "let it breathe" scold. The chart's own overheat reversal
+    // physics already punish the price, so we do NOT also nuke the Candle Chain
+    // here — that would trap a fast masher in a permanent penalty loop.
+    let next: GameState = {
+      ...state,
+      resistance: {
+        ...state.resistance,
+        phase: 'overheated',
+        phaseUntil: now + RESISTANCE_OVERHEAT_HOLD_MS,
+        windowUntil: 0,
+        crossedAt: 0,
+        lastRating: 'overheated',
+      },
+    }
+    next = pushFountain(next, 'TOO HOT', 'reject')
+    return { next, rating: 'overheated' }
+  }
+
+  if (outcome === 'rejected') {
+    // Pushed above the line without a clean hit: a red rejection candle, a heat
+    // spike, and chain damage — one miss stings but never ends the run.
+    const combo = Math.floor(state.combo / 2)
+    let next: GameState = {
+      ...state,
+      combo,
+      comboMultiplier: getComboMultiplier(combo),
+      resources: { ...state.resources, heat: state.resources.heat + 4 },
+      resistance: {
+        ...state.resistance,
+        phase: 'rejected',
+        phaseUntil: now + RESISTANCE_REJECTED_HOLD_MS,
+        windowUntil: 0,
+        crossedAt: 0,
+        breakoutStreak: 0,
+        rejections: state.resistance.rejections + 1,
+        lastRating: 'rejected',
+        aboveSinceMs: 0,
+      },
+    }
+    next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: 14 }, now)
+    next = pushFountain(next, 'REJECTED', 'reject')
+    return { next, rating: 'rejected' }
+  }
+
+  // 'weak' (building momentum below the line) / 'none' (mid event beat): no penalty
+  // and no combat text — the button already reads BUILD MOMENTUM here.
+  return { next: state, rating: outcome === 'weak' ? 'weak' : null }
+}
+
 function sendCandle(state: GameState, now: number): GameState {
   if (!state.currentCoin.launched) {
     return launchCoin(state)
@@ -596,6 +702,11 @@ function sendCandle(state: GameState, now: number): GameState {
 
   next = awardLiquidity(next, walletGain, curveGain)
 
+  // v0.4A Resistance Breakout: classify the tap against the (post-impulse) line
+  // and stamp the matching arcade beat — breakout pop, rejection dump, or scold.
+  const resistanceResult = resolveResistanceTap(next, now, walletGain, isOverdrive)
+  next = resistanceResult.next
+
   // Ticker de-spam (subtask 6): a tap line only on a crit or every 10th tap,
   // instead of one per tap. The chain/chart/button carry the per-tap feedback.
   if (isCrit || tapId % 10 === 0) {
@@ -607,7 +718,7 @@ function sendCandle(state: GameState, now: number): GameState {
 
   next = {
     ...next,
-    lastTapEffect: { id: tapId, gain: walletGain, microLine, crit: isCrit },
+    lastTapEffect: { id: tapId, gain: walletGain, microLine, crit: isCrit, rating: resistanceResult.rating ?? undefined },
   }
 
   next = stampStreakReward(next, combo)
@@ -773,7 +884,8 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
   // v0.3.5: during Overdrive the idle ticks between mashes must not cook heat or
   // trigger a reversal either, or a fast masher's gaps would still punish them.
   const overdriveActive = getIsOverdrive(state.overdriveUntil, now)
-  const withChart: GameState = advanceChartState(
+  const prevPhase = state.resistance.phase
+  const base: GameState = advanceChartState(
     { ...state, idleTicks },
     dtSeconds,
     {
@@ -784,6 +896,23 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
     },
     now,
   )
+
+  // v0.4A anti-pin: advanceResistance force-rejects a chart that floated above the
+  // line too long (the top-pin case). Taps never run this path, so a fresh
+  // 'rejected' phase here is always the idle anti-pin — dump the chart, scold, and
+  // nick the chain so the target visibly cycles instead of parking at the top.
+  let withChart = base
+  const antiPinRejected =
+    base.resistance.phase === 'rejected' && prevPhase !== 'rejected' && prevPhase !== 'broken' && prevPhase !== 'overheated'
+  if (antiPinRejected) {
+    const combo = Math.floor(base.combo / 2)
+    withChart = advanceChartState(base, CHART_TAP_STEP, { jeetDump: 10 }, now)
+    withChart = pushFountain(withChart, 'REJECTED', 'reject')
+    withChart = addTicker(
+      { ...withChart, combo, comboMultiplier: getComboMultiplier(combo) },
+      'REJECTED — the chart floated too high. Let it breathe.',
+    )
+  }
 
   // Never drift while onboarding (the prestige/graduation modal only opens at
   // 100% where the curve floor already prevents any decay). v0.3.2: the

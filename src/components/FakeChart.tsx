@@ -85,11 +85,31 @@ export function FakeChart({
   const overheated = chart.heat > OVERHEAT
   const unstable = zone.zone === 'overheated' || zone.zone === 'graduation' || overheated
   const dumping = !isUp
-  const now = Date.now()
-  const windowActive = resistance.windowUntil > now
-  const distanceToResistance = resistance.price - chart.price
-  const resistanceClose = distanceToResistance <= 18 && distanceToResistance >= -6
-  const rating = tapEffect?.rating
+
+  // v0.4A Resistance Breakout arcade states drive the panel + line visuals. Phase
+  // is authoritative (advanceResistance updates it every tick), so the panel reads
+  // the same state the button teaches.
+  const phase = resistance.phase
+  const smash = phase === 'smash'
+  const broken = phase === 'broken'
+  const brokenPerfect = broken && resistance.lastRating === 'perfect'
+  const rejected = phase === 'rejected' || phase === 'overheated'
+  const approaching = phase === 'approaching'
+
+  // Short action words — the player-facing teaching cue. Numbers live in dev stats.
+  const cue = broken
+    ? brokenPerfect
+      ? 'BREAKOUT PERFECT'
+      : 'BREAKOUT'
+    : phase === 'rejected'
+      ? 'REJECTED'
+      : phase === 'overheated'
+        ? 'TOO HOT'
+        : smash
+          ? 'SMASH NOW'
+          : approaching
+            ? 'GET READY'
+            : 'BUILD MOMENTUM'
 
   // v0.3 Chart Gravity: a floor marker showing what the current milestone
   // permanently protects, plus a status flag communicating decay vs. held.
@@ -112,10 +132,10 @@ export function FakeChart({
         milestonePulse ? 'milestone-pulse' : ''
       } ${dumping ? 'dumping' : ''} ${unstable ? 'unstable' : ''} ${isDecaying ? 'decaying' : ''} ${
         overheated ? 'overheated' : ''
-      } ${supercharged ? 'supercharged' : ''} ${overdrive ? 'overdrive' : ''} ${
-        windowActive ? 'smash-window' : ''
-      } ${resistanceClose ? 'resistance-close' : ''} ${rating === 'perfect' ? 'breakout-perfect' : ''} ${
-        rating === 'rejected' ? 'rejected' : ''
+      } ${supercharged ? 'supercharged' : ''} ${overdrive ? 'overdrive' : ''} ${smash ? 'smash-window' : ''} ${
+        approaching ? 'resistance-close' : ''
+      } ${broken ? 'breakout' : ''} ${brokenPerfect ? 'breakout-perfect' : ''} ${
+        rejected ? 'resistance-rejected' : ''
       }`}
       aria-label="Fake chart"
     >
@@ -124,14 +144,12 @@ export function FakeChart({
       {overheated && !overdrive ? <span className="chart-overheat-flag">OVERHEATED — LET IT BREATHE</span> : null}
       {overdrive ? <span className="chart-overdrive-flag">OVERDRIVE — GRAVITY HAS LEFT THE CHAT</span> : null}
       <div className="chart-header">
-        <span className={`surf-zone-label surf-${zone.zone}`}>
-          RESISTANCE {Math.round(resistance.price)} · PRICE {Math.round(chart.price)}
-        </span>
-        <strong className={isUp ? 'chart-up' : 'chart-down'}>{windowActive ? 'SMASH' : isUp ? 'UP ONLY' : 'DUMPING'}</strong>
+        <span className={`resistance-cue resistance-${phase}`}>{cue}</span>
+        <strong className={isUp ? 'chart-up' : 'chart-down'}>{smash ? 'SMASH' : isUp ? 'UP ONLY' : 'DUMPING'}</strong>
       </div>
       <svg className="fake-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Fictional candlestick chart">
-        <g className={`chart-resistance-target ${windowActive ? 'active' : ''}`} aria-hidden="true">
-          {windowActive ? (
+        <g className={`chart-resistance-target resistance-${phase}`} aria-hidden="true">
+          {smash ? (
             <rect
               className="chart-smash-window"
               x={segmentX - 8}
@@ -143,9 +161,22 @@ export function FakeChart({
           ) : null}
           <line className="chart-resistance-line halo" x1={segmentX} x2={WIDTH - 8} y1={resistanceY} y2={resistanceY} />
           <line className="chart-resistance-line core" x1={segmentX} x2={WIDTH - 8} y1={resistanceY} y2={resistanceY} />
-          <text className="chart-resistance-label" x={segmentX - 8} y={Math.max(10, resistanceY - 8)}>
-            RESISTANCE
-          </text>
+          {/* v0.4A: on a breakout the line shatters — an expanding burst ring at the
+              break point (keyed by target id so entering 'broken' mounts a fresh,
+              one-shot animation) rides on top of the fading line. */}
+          {broken ? (
+            <circle
+              key={`burst-${resistance.id}`}
+              className="chart-resistance-burst"
+              cx={Math.min(WIDTH - 12, currentCx)}
+              cy={resistanceY}
+              r={6}
+            />
+          ) : (
+            <text className="chart-resistance-label" x={segmentX - 8} y={Math.max(10, resistanceY - 8)}>
+              {approaching ? 'RESISTANCE ▲' : 'RESISTANCE'}
+            </text>
+          )}
         </g>
         {visible.map((candle, index) => {
           const cx = index * slot + slot / 2
@@ -170,7 +201,7 @@ export function FakeChart({
             </g>
           )
         })}
-        <g className={`chart-active-tip ${windowActive ? 'ready' : ''}`} aria-hidden="true">
+        <g className={`chart-active-tip ${smash ? 'ready' : ''}`} aria-hidden="true">
           <circle cx={currentCx} cy={currentCy} r="5.8" />
           <circle cx={currentCx} cy={currentCy} r="2.5" />
         </g>

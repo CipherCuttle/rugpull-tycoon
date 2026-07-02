@@ -87,6 +87,13 @@ export interface EventState {
 
 export type TapRating = 'perfect' | 'good' | 'weak' | 'rejected' | 'overheated'
 
+// v0.4A Resistance Breakout Clarity Pass. The resistance target now walks a small
+// arcade state machine so the player reads it as a boss weak-point, not a passive
+// overlay. `waiting`/`approaching`/`smash` are derived from the live chart price;
+// `broken`/`rejected`/`overheated` are short-lived event beats (held until
+// `phaseUntil`) that a tap (or the anti-pin timer) stamps.
+export type ResistancePhase = 'waiting' | 'approaching' | 'smash' | 'broken' | 'rejected' | 'overheated'
+
 export interface ResistanceState {
   id: number
   price: number
@@ -96,6 +103,15 @@ export interface ResistanceState {
   breakoutStreak: number
   perfectBreakouts: number
   rejections: number
+  // v0.4A clarity pass.
+  phase: ResistancePhase
+  // ms epoch a transient beat (broken/rejected/overheated) holds until, after
+  // which advanceResistance respawns a fresh target.
+  phaseUntil: number
+  // ms epoch the chart first climbed above the line without a clean break. Drives
+  // the anti-pin forced rejection so the chart can't ride the line into the top.
+  aboveSinceMs: number
+  lastRating: TapRating | null
 }
 
 export interface TapEffect {
@@ -138,7 +154,16 @@ export interface StreakEffect {
 // BattleText style). The reducer appends these to a small capped ring; the
 // StreakFountain component turns each new id into one short-lived DOM particle.
 // Purely visual — never persisted meaningfully (cleared on load).
-export type FountainKind = 'gain' | 'crit' | 'chain' | 'milestone' | 'supercharge' | 'overdrive'
+export type FountainKind =
+  | 'gain'
+  | 'crit'
+  | 'chain'
+  | 'milestone'
+  | 'supercharge'
+  | 'overdrive'
+  // v0.4A: breakout success / resistance rejection combat text.
+  | 'breakout'
+  | 'reject'
 
 export interface FountainEvent {
   id: number

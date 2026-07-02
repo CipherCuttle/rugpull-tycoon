@@ -604,6 +604,48 @@ h2 {
   animation: button-recover 520ms ease-out;
 }
 
+/* v0.4A Resistance Breakout — the button is the main instruction surface. */
+.main-action.breakout-ready {
+  color: #150406;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.32), transparent 55%),
+    linear-gradient(135deg, var(--amber), var(--acid));
+  box-shadow:
+    0 9px 0 #146a2f,
+    0 0 0 2px rgba(255, 194, 58, 0.6),
+    0 18px 46px rgba(255, 194, 58, 0.42);
+  animation: button-anxious 300ms ease-in-out infinite;
+}
+
+.main-action.breakout-ready small {
+  color: rgba(4, 20, 10, 0.78);
+}
+
+.main-action.broken {
+  color: #04140a;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), transparent 55%),
+    linear-gradient(135deg, var(--acid), var(--amber));
+  box-shadow:
+    0 9px 0 #146a2f,
+    0 18px 46px rgba(70, 255, 155, 0.42);
+}
+
+.main-action.breakout-rejected {
+  color: #fff2f2;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.18), transparent 50%),
+    linear-gradient(135deg, var(--red), #ff6b3b);
+  box-shadow:
+    0 9px 0 #7a1420,
+    0 18px 44px rgba(255, 59, 82, 0.46);
+  animation: reject-shake 260ms ease-out;
+}
+
+.main-action.breakout-rejected small {
+  color: rgba(255, 240, 240, 0.9);
+}
+
 .main-action span {
   max-width: 100%;
   overflow-wrap: anywhere;
@@ -1411,6 +1453,79 @@ h2 {
   text-shadow: 0 0 7px rgba(255, 194, 58, 0.75);
 }
 
+/* v0.4A phase-driven line states. Approaching brightens the line so the player
+   knows a smash is coming; smash makes it flash (handled by .chart-smash-window);
+   broken shatters/fades it; rejected/overheated turns it red. */
+.chart-resistance-target.resistance-approaching .chart-resistance-line.core {
+  stroke-dasharray: 4 3;
+  animation: resistance-line-pulse 700ms ease-in-out infinite;
+}
+
+.chart-resistance-target.resistance-smash .chart-resistance-line.core {
+  stroke: #fff;
+  stroke-dasharray: none;
+  filter: drop-shadow(0 0 8px rgba(255, 194, 58, 0.95));
+}
+
+.chart-resistance-target.resistance-broken .chart-resistance-line {
+  animation: resistance-line-shatter 500ms ease-out forwards;
+}
+
+.chart-resistance-target.resistance-rejected .chart-resistance-line.core,
+.chart-resistance-target.resistance-overheated .chart-resistance-line.core {
+  stroke: var(--red-2);
+  filter: drop-shadow(0 0 8px rgba(255, 59, 82, 0.85));
+}
+
+.chart-resistance-target.resistance-rejected .chart-resistance-line.halo,
+.chart-resistance-target.resistance-overheated .chart-resistance-line.halo {
+  stroke: rgba(255, 59, 82, 0.3);
+  filter: drop-shadow(0 0 9px rgba(255, 59, 82, 0.6));
+}
+
+.chart-resistance-burst {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.5;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: resistance-burst 500ms ease-out forwards;
+}
+
+/* v0.4A: the header's primary teaching cue — short action words per phase. This
+   replaces the old debug "RESISTANCE n · PRICE n" readout (now dev-only). */
+.resistance-cue {
+  font-weight: 1000 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.resistance-cue.resistance-waiting {
+  color: var(--faint);
+}
+
+.resistance-cue.resistance-approaching {
+  color: var(--cyan);
+  text-shadow: 0 0 10px rgba(70, 224, 255, 0.5);
+}
+
+.resistance-cue.resistance-smash {
+  color: #fff;
+  text-shadow: 0 0 12px rgba(255, 194, 58, 0.95);
+  animation: resistance-line-pulse 320ms ease-in-out infinite;
+}
+
+.resistance-cue.resistance-broken {
+  color: var(--acid);
+  text-shadow: 0 0 12px rgba(70, 255, 155, 0.75);
+}
+
+.resistance-cue.resistance-rejected,
+.resistance-cue.resistance-overheated {
+  color: var(--red-2);
+  text-shadow: 0 0 10px rgba(255, 59, 82, 0.7);
+}
+
 .chart-smash-window {
   fill: rgba(255, 194, 58, 0.14);
   stroke: rgba(255, 255, 255, 0.55);
@@ -1450,12 +1565,29 @@ h2 {
   border-color: rgba(70, 224, 255, 0.48);
 }
 
+.hero-chart.breakout .fake-chart,
 .hero-chart.breakout-perfect .fake-chart {
   animation: breakout-flash 220ms ease-out;
 }
 
-.hero-chart.rejected .fake-chart {
+.hero-chart.breakout {
+  border-color: rgba(70, 255, 155, 0.85);
+  box-shadow: var(--shadow), 0 0 34px rgba(70, 255, 155, 0.3), inset 0 0 26px rgba(255, 194, 58, 0.1);
+}
+
+.hero-chart.breakout-perfect {
+  border-color: rgba(255, 194, 58, 0.92);
+  box-shadow: var(--shadow), 0 0 40px rgba(255, 194, 58, 0.36), inset 0 0 28px rgba(70, 255, 155, 0.12);
+}
+
+.hero-chart.resistance-rejected {
+  border-color: rgba(255, 59, 82, 0.85);
+  box-shadow: var(--shadow), 0 0 30px rgba(255, 59, 82, 0.3);
+}
+
+.hero-chart.resistance-rejected .fake-chart {
   filter: drop-shadow(0 0 8px rgba(255, 59, 82, 0.55));
+  animation: reject-shake 260ms ease-out;
 }
 
 .hero-chart.overheated.unstable::after {
@@ -1621,6 +1753,19 @@ h2 {
   color: #fff;
   font-size: 1.5rem;
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.9), 0 0 32px rgba(255, 194, 58, 0.7);
+}
+
+/* v0.4A: breakout success owns the loud amber lane; rejection is a sharp red. */
+.fountain-breakout {
+  color: #fff;
+  font-size: 1.46rem;
+  text-shadow: 0 0 18px rgba(255, 194, 58, 0.95), 0 0 30px rgba(70, 255, 155, 0.7), 0 3px 14px rgba(0, 0, 0, 0.95);
+}
+
+.fountain-reject {
+  color: var(--red-2);
+  font-size: 1.3rem;
+  text-shadow: 0 0 16px rgba(255, 59, 82, 0.85), 0 2px 12px rgba(0, 0, 0, 0.9);
 }
 
 /* --- Supercharge meter / Overdrive countdown, under the main button. --- */
@@ -2106,6 +2251,56 @@ h2 {
   }
 }
 
+/* v0.4A resistance state motion. */
+@keyframes resistance-line-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes resistance-line-shatter {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes resistance-burst {
+  0% {
+    opacity: 1;
+    stroke-width: 3;
+    transform: scale(0.4);
+  }
+  100% {
+    opacity: 0;
+    stroke-width: 0.5;
+    transform: scale(4.5);
+  }
+}
+
+@keyframes reject-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-4px);
+  }
+  50% {
+    transform: translateX(3px);
+  }
+  80% {
+    transform: translateX(-2px);
+  }
+}
+
 @keyframes tip-ready-pulse {
   0% {
     r: 5.8;
@@ -2347,6 +2542,14 @@ h2 {
   .chart-smash-window,
   .chart-active-tip.ready circle:first-child,
   .hero-chart.breakout-perfect .fake-chart,
+  .hero-chart.breakout .fake-chart,
+  .hero-chart.resistance-rejected .fake-chart,
+  .resistance-cue.resistance-smash,
+  .chart-resistance-target.resistance-approaching .chart-resistance-line.core,
+  .chart-resistance-target.resistance-broken .chart-resistance-line,
+  .chart-resistance-burst,
+  .main-action.breakout-ready,
+  .main-action.breakout-rejected,
   .main-action::after,
   .ticker-symbol::before,
   .streak-burst,
