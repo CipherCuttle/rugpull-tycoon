@@ -6,7 +6,18 @@
 // working mute switch. Everything here is intentionally a no-op except the
 // setting itself — wiring a real <audio> / WebAudio sample is a later pass.
 
-export type SoundKind = 'tap' | 'crit' | 'upgrade' | 'card' | 'graduate' | 'milestone'
+export type SoundKind =
+  | 'tap'
+  | 'crit'
+  | 'upgrade'
+  | 'card'
+  | 'graduate'
+  | 'milestone'
+  // v0.3.5 Streak Fountain + Supercharge. Still no-ops; wired at the fountain /
+  // meter / overdrive moments so real clips can drop in later.
+  | 'streak'
+  | 'supercharge'
+  | 'overdrive'
 
 const STORAGE_KEY = 'rugpull-tycoon.sound-enabled.v1'
 

@@ -108,6 +108,13 @@ export interface ChartAdvanceOpts {
   frictionScale?: number
   // One-off downward shove (a jeet raid), already shield-scaled.
   jeetDump?: number
+  // v0.3.5: scales ALL heat gain this step (per-tap + high-pin). Supercharge
+  // passes <1 (mashing stays cooler); Overdrive passes 0 (no cooking at all).
+  heatScale?: number
+  // v0.3.5: Overdrive passes true to suspend the overheat reversal punishment —
+  // the chart can be pinned high and hot without dumping. Heat still decays
+  // normally, so it drains back to safe by the time Overdrive ends.
+  noReversal?: boolean
 }
 
 // Largest stable integration step. friction × dt must stay < 1, and we want
@@ -128,7 +135,19 @@ export function advanceChart(chart: ChartState, dt: number, opts: ChartAdvanceOp
     let first = true
     while (remaining > 1e-6) {
       const step = Math.min(MAX_STEP, remaining)
-      current = advanceChart(current, step, first ? opts : { gravityScale: opts.gravityScale, frictionScale: opts.frictionScale, autoImpulse: opts.autoImpulse })
+      current = advanceChart(
+        current,
+        step,
+        first
+          ? opts
+          : {
+              gravityScale: opts.gravityScale,
+              frictionScale: opts.frictionScale,
+              autoImpulse: opts.autoImpulse,
+              heatScale: opts.heatScale,
+              noReversal: opts.noReversal,
+            },
+      )
       remaining -= step
       first = false
     }
@@ -137,6 +156,7 @@ export function advanceChart(chart: ChartState, dt: number, opts: ChartAdvanceOp
 
   const gravityScale = opts.gravityScale ?? 1
   const frictionScale = opts.frictionScale ?? 1
+  const heatScale = opts.heatScale ?? 1
 
   const seed = chart.seed + 1
   const noise = (roll(seed) - 0.5) * 2 * NOISE_AMP
@@ -145,10 +165,12 @@ export function advanceChart(chart: ChartState, dt: number, opts: ChartAdvanceOp
   let velocity = chart.velocity
   let heat = chart.heat
 
-  // Heat: decay, per-tap add, and a top-up while pinned high.
-  heat = Math.max(0, heat - HEAT_DECAY * dt + (opts.heatAdd ?? 0))
+  // Heat: decay, per-tap add, and a top-up while pinned high. heatScale (<1 while
+  // Supercharged, 0 during Overdrive) throttles the *gains* but never the decay,
+  // so a hot chart always cools back down on its own.
+  heat = Math.max(0, heat - HEAT_DECAY * dt + (opts.heatAdd ?? 0) * heatScale)
   if (price > 84) {
-    heat += HIGH_HEAT_GAIN * dt
+    heat += HIGH_HEAT_GAIN * dt * heatScale
   }
   heat = Math.min(HEAT_MAX, heat)
   const overheated = heat > OVERHEAT
@@ -161,8 +183,9 @@ export function advanceChart(chart: ChartState, dt: number, opts: ChartAdvanceOp
   if (price < SOFT_MIN) {
     accel += LOW_BOUNCE_K * (SOFT_MIN - price)
   }
-  if (overheated && price > SOFT_MAX) {
+  if (overheated && price > SOFT_MAX && !opts.noReversal) {
     // Overmash punishment: the hotter and higher, the harder it reverses.
+    // Suspended during Overdrive (noReversal) so mashing has no consequences.
     accel -= REVERSAL_K * (heat - OVERHEAT) * (price - SOFT_MAX)
   }
 

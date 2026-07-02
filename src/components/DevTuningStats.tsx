@@ -91,6 +91,10 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
           <div>passive/sec: {passiveCurvePerSec.toFixed(3)}% curve</div>
           <div>combo: {state.combo} (x{state.comboMultiplier.toFixed(1)}) max {state.maxComboThisRun}</div>
           <div>
+            supercharge: {state.supercharge.toFixed(0)}%{' '}
+            {state.overdriveUntil > Date.now() ? `OVERDRIVE ${Math.ceil((state.overdriveUntil - Date.now()) / 1000)}s` : ''}
+          </div>
+          <div>
             chart: {state.chart.price.toFixed(1)} v{state.chart.velocity.toFixed(1)} h{state.chart.heat.toFixed(0)}
           </div>
           <div>ETA @3tps·x2: {Number.isFinite(etaSeconds) ? `${etaSeconds}s` : '—'}</div>

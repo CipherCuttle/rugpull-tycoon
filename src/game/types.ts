@@ -119,6 +119,18 @@ export interface StreakEffect {
   line: string
 }
 
+// v0.3.5 Streak Fountain: a single floating-combat-text burst (WoW / MikScrolling
+// BattleText style). The reducer appends these to a small capped ring; the
+// StreakFountain component turns each new id into one short-lived DOM particle.
+// Purely visual — never persisted meaningfully (cleared on load).
+export type FountainKind = 'gain' | 'crit' | 'chain' | 'milestone' | 'supercharge' | 'overdrive'
+
+export interface FountainEvent {
+  id: number
+  text: string
+  kind: FountainKind
+}
+
 // v0.3.2 Chart Surf Combo: a single non-blocking toast slot. The reducer stamps
 // the newest toast-worthy event here (evidence found, operator hired, chain
 // tier-up); the UI shows exactly one at a time and auto-dismisses. Because each
@@ -152,6 +164,20 @@ export interface GameState {
   comboMultiplier: number
   lastTapAt: number
   maxComboThisRun: number
+  // v0.3.5 Streak Fountain + Supercharge. `supercharge` (0–100) builds while a
+  // Candle Chain is alive (faster at higher combo multipliers) and decays slowly
+  // when it breaks; at 100 the run is "Supercharged" (cooler mashing, punchier
+  // taps). `superchargeFullMs` accumulates while pinned at 100 and, past the
+  // threshold, arms Overdrive: a timed window (`overdriveUntil`, ms epoch) where
+  // overheat can't punish mashing. All three are cosmetic/feel — they shape the
+  // visual chart and a small curve nudge, never the core bonding-curve pacing.
+  supercharge: number
+  superchargeFullMs: number
+  overdriveUntil: number
+  // v0.3.5: capped ring of floating-combat-text bursts (visual only). See
+  // FountainEvent. `fountainSeq` is the monotonic id source.
+  fountainEvents: FountainEvent[]
+  fountainSeq: number
   // v0.3.4 Candlestick Physics: the visual-only candle chart. Fully decoupled
   // from the economy — it reacts to taps (velocity impulse), gravity, and
   // overheat, and drives the surf zones off its `price`. See game/chart.ts.

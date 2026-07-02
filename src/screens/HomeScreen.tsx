@@ -7,6 +7,7 @@ import { MainActionButton } from '../components/MainActionButton'
 import { PrestigeModal } from '../components/PrestigeModal'
 import { ResourceBar } from '../components/ResourceBar'
 import { StreakBurst } from '../components/StreakBurst'
+import { StreakFountain } from '../components/StreakFountain'
 import { TickerFeed } from '../components/TickerFeed'
 import { ToastHost } from '../components/ToastHost'
 import { UpgradeList } from '../components/UpgradeList'
@@ -39,6 +40,11 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
   const milestoneLabel = getMilestoneLabel(state.bondingCurveTier)
   const objective = getNextObjective(state)
 
+  // v0.3.5 streak-mastery aura states (visual only). overdriveUntil is an ms
+  // epoch; the ~120ms game tick re-renders HomeScreen so these stay current.
+  const overdrive = state.overdriveUntil > Date.now()
+  const supercharged = !overdrive && state.supercharge >= 100
+
   function openDrawer(next: Drawer) {
     setDrawer(next)
 
@@ -60,7 +66,7 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
   }
 
   return (
-    <main className="game-shell">
+    <main className={`game-shell ${overdrive ? 'overdrive-shell' : ''}`}>
       {/* 1. TOP AREA: ticker, milestone label, compact resource row */}
       <header className="top-area">
         <div className="top-area-heading">
@@ -80,8 +86,11 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         milestoneLabel={milestoneLabel}
         tapEffect={state.lastTapEffect}
         isDecaying={state.isDecaying}
+        supercharged={supercharged}
+        overdrive={overdrive}
       />
       <StreakBurst effect={state.streakEffect} />
+      <StreakFountain events={state.fountainEvents} />
 
       {/* 3. MAIN ACTION AREA */}
       <MainActionButton

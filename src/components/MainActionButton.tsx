@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { GRACE_TICKS, getComboCritBonus, getIsNearTierFloor, getSurfZone, getTierFloor } from '../game/economy'
+import {
+  GRACE_TICKS,
+  getComboCritBonus,
+  getIsNearTierFloor,
+  getSurfZone,
+  getTierFloor,
+  OVERDRIVE_DURATION_MS,
+} from '../game/economy'
 import { playSound } from '../game/sound'
 import type { GameState } from '../game/types'
 
@@ -97,6 +104,15 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   const chainAtRisk = launched && !graduateReady && state.combo > 0 && state.idleTicks >= 1
   const zone = getSurfZone(state.chart.price)
 
+  // v0.3.5 Supercharge / Overdrive. overdriveUntil is an ms epoch; the ~120ms
+  // game tick re-renders us, so the countdown ticks down smoothly.
+  const overdrive = launched && !graduateReady && state.overdriveUntil > Date.now()
+  const supercharged = launched && !graduateReady && !overdrive && state.supercharge >= 100
+  const superchargePct = Math.min(100, Math.round(state.supercharge))
+  const overdriveRemaining = overdrive ? Math.max(0, state.overdriveUntil - Date.now()) : 0
+  const overdriveSeconds = Math.ceil(overdriveRemaining / 1000)
+  const overdrivePct = Math.min(100, (overdriveRemaining / OVERDRIVE_DURATION_MS) * 100)
+
   const label = !launched
     ? `LAUNCH ${state.currentCoin.ticker}`
     : graduateReady
@@ -155,7 +171,9 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
           graduateReady ? 'graduate-ready' : ''
         } ${almost ? 'almost' : ''} ${decaying ? 'decaying' : ''} ${panic ? 'panic' : ''} ${
           recovering ? 'recovering' : ''
-        } ${chainAtRisk ? 'chain-risk' : ''} ${chainClass}`}
+        } ${chainAtRisk ? 'chain-risk' : ''} ${chainClass} ${supercharged ? 'supercharged' : ''} ${
+          overdrive ? 'overdrive' : ''
+        }`}
         type="button"
         onClick={handleClick}
       >
@@ -177,6 +195,31 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
             <strong>+{Math.round(comboCritBonus * 100)}%</strong>
             <small>Crit Chance · +18% Rescue</small>
           </span>
+        </div>
+      ) : null}
+
+      {launched && !graduateReady ? (
+        <div
+          className={`supercharge-rail ${supercharged ? 'full' : ''} ${overdrive ? 'overdrive' : ''}`}
+          aria-label={overdrive ? 'Overdrive countdown' : 'Supercharge meter'}
+        >
+          {overdrive ? (
+            <>
+              <span className="supercharge-label">OVERDRIVE — JEETS ARE ILLEGAL</span>
+              <div className="supercharge-track">
+                <div className="supercharge-fill overdrive-countdown" style={{ width: `${overdrivePct}%` }} />
+              </div>
+              <strong className="supercharge-value">{overdriveSeconds}s</strong>
+            </>
+          ) : (
+            <>
+              <span className="supercharge-label">{supercharged ? 'MASH WINDOW OPEN' : 'SUPERCHARGE'}</span>
+              <div className="supercharge-track">
+                <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />
+              </div>
+              <strong className="supercharge-value">{superchargePct}%</strong>
+            </>
+          )}
         </div>
       ) : null}
 

@@ -60,6 +60,16 @@ function migrateGameState(value: GameState): GameState {
     comboMultiplier: raw.comboMultiplier ?? 1,
     lastTapAt: raw.lastTapAt ?? 0,
     maxComboThisRun: raw.maxComboThisRun ?? 0,
+    // v0.3.5 Streak Fountain + Supercharge. Additive: an old save loads with an
+    // empty supercharge meter and no Overdrive. `overdriveUntil` is an absolute
+    // ms epoch, so any saved value is already in the past on load (Overdrive is a
+    // few-second window) and reads as inactive — no need to clamp it. Fountain
+    // events are purely visual, so they're always cleared on load, never replayed.
+    supercharge: raw.supercharge ?? 0,
+    superchargeFullMs: raw.superchargeFullMs ?? 0,
+    overdriveUntil: raw.overdriveUntil ?? 0,
+    fountainEvents: [],
+    fountainSeq: raw.fountainSeq ?? 0,
     // v0.3.4 Candlestick Physics: additive. Old saves (which stored surfPressure
     // + a chartPoints line) load with a fresh, pre-rolled candle chart; the next
     // tap/tick drives it normally. The stale surfPressure/chartPoints fields are

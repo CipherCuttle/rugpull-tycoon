@@ -36,15 +36,28 @@ import {
   getComboMultiplier,
   getDecayRate,
   getHeatGain,
+  getIsOverdrive,
+  getIsSupercharged,
   getJeetLossRatio,
   getPassiveGainPerSecond,
   getPrestigeReward,
   getTierFloor,
   getTotalUpgradeLevels,
   getUpgradeCost,
+  OVERDRIVE_ARM_MS,
+  OVERDRIVE_CRIT_BONUS,
+  OVERDRIVE_CURVE_BONUS,
+  OVERDRIVE_DURATION_MS,
+  OVERDRIVE_IMPULSE_SCALE,
+  SUPERCHARGE_BUILD_PER_SEC,
+  SUPERCHARGE_CHAIN_MIN,
+  SUPERCHARGE_DECAY_PER_SEC,
+  SUPERCHARGE_HEAT_SCALE,
+  SUPERCHARGE_IMPULSE_SCALE,
+  SUPERCHARGE_MAX,
 } from './economy'
 import { advanceChart, createInitialChart, CHART_HEAT_PER_TAP, CHART_TAP_STEP } from './chart'
-import type { EventProgress, GameAction, GameState, ResourceState, ToastKind } from './types'
+import type { EventProgress, FountainKind, GameAction, GameState, ResourceState, ToastKind } from './types'
 import { SAVE_VERSION } from './types'
 
 const MAX_TICKER_LINES = 14
@@ -93,6 +106,11 @@ export function createInitialGame(): GameState {
     comboMultiplier: 1,
     lastTapAt: 0,
     maxComboThisRun: 0,
+    supercharge: 0,
+    superchargeFullMs: 0,
+    overdriveUntil: 0,
+    fountainEvents: [],
+    fountainSeq: 0,
     chart: createInitialChart(),
     upgrades: initialUpgrades(),
     cards: initialCards(),
@@ -167,11 +185,34 @@ const STREAK_REWARDS: Record<number, { title: string; line: string }> = {
   5: { title: 'CHAIN STARTED', line: '×1.2 CURVE PUSH · SURF PRESSURE BOOSTED' },
   10: { title: 'NICE CANDLE', line: '×1.5 CURVE PUSH · CRIT CHANCE UP' },
   20: { title: 'SURFING THE LIE', line: '×2.0 CURVE PUSH · CRIT CHANCE UP' },
-  35: { title: "JEETS CAN'T KEEP UP", line: '×3.0 CURVE PUSH · SURF PRESSURE BOOSTED' },
+  35: { title: "JEETS CAN'T KEEP UP", line: '×3.0 CURVE PUSH · SUPERCHARGE CLIMBING' },
   50: { title: 'GRAVITY CLOCKED OUT', line: '×3.0 CURVE PUSH LOCKED' },
-  75: { title: 'CANDLE GOD MODE', line: 'CRIT CHANCE UP · SURF PRESSURE BOOSTED' },
+  75: { title: 'SUPERCHARGE ONLINE', line: 'CRIT CHANCE UP · OVERDRIVE INCOMING' },
   100: { title: 'THE CHART IS LYING BEAUTIFULLY', line: '×3.0 CURVE PUSH · KEEP THE CHAIN ALIVE' },
 }
+
+// v0.3.5 Streak Fountain. Newest event appended to a capped ring; the
+// StreakFountain component turns each new id into one short-lived DOM particle.
+// Capped so a frantic masher can never flood the DOM.
+const MAX_FOUNTAIN_EVENTS = 8
+
+function pushFountain(state: GameState, text: string, kind: FountainKind): GameState {
+  const seq = state.fountainSeq + 1
+  return {
+    ...state,
+    fountainSeq: seq,
+    fountainEvents: [...state.fountainEvents, { id: seq, text, kind }].slice(-MAX_FOUNTAIN_EVENTS),
+  }
+}
+
+const SUPERCHARGE_ONLINE_LINES = ['SUPERCHARGED', 'THE CANDLE ENGINE IS SCREAMING', 'MASH WINDOW OPEN']
+const OVERDRIVE_START_LINES = [
+  'OVERDRIVE ACTIVE',
+  'MASH WITHOUT CONSEQUENCES',
+  'GRAVITY HAS LEFT THE CHAT',
+  'JEETS ARE TEMPORARILY ILLEGAL',
+  'THE CHART IS NOW PURE FICTION',
+]
 
 function stampStreakReward(state: GameState, combo: number): GameState {
   const reward = STREAK_REWARDS[combo]
@@ -181,11 +222,17 @@ function stampStreakReward(state: GameState, combo: number): GameState {
   }
 
   const seq = state.effectSeq + 1
-  return {
-    ...state,
-    effectSeq: seq,
-    streakEffect: { id: seq, combo, title: reward.title, line: reward.line },
-  }
+  // Milestone drives both the big Guitar-Hero banner (streakEffect) and a
+  // floating-combat-text burst in the fountain lane.
+  return pushFountain(
+    {
+      ...state,
+      effectSeq: seq,
+      streakEffect: { id: seq, combo, title: reward.title, line: reward.line },
+    },
+    reward.title,
+    'milestone',
+  )
 }
 
 function getUpgradeToastLine(upgradeId: string): string {
@@ -476,6 +523,10 @@ function sendCandle(state: GameState, now: number): GameState {
   const withinWindow = state.lastTapAt > 0 && now - state.lastTapAt <= COMBO_WINDOW_MS
   const combo = withinWindow ? state.combo + 1 : 1
   const comboMultiplier = getComboMultiplier(combo)
+  // v0.3.5: the streak-mastery states shape this tap (meters themselves advance in
+  // the TICK loop; here we just read the state they're in).
+  const isOverdrive = getIsOverdrive(state.overdriveUntil, now)
+  const isSupercharged = getIsSupercharged(state.supercharge)
 
   const baseGain = getClickGain(state)
   // v0.2 juice: a "critical candle" lands a chunkier payout and a louder visual.
@@ -483,13 +534,16 @@ function sendCandle(state: GameState, now: number): GameState {
   // decaying (heroic rescue). v0.3.2: and nudges up with a hot chain, so combo
   // taps crit noticeably more — part of "combo taps feel much better".
   const comboCritBonus = getComboCritBonus(comboMultiplier)
-  const critChance = (wasDecaying ? 0.18 : 0.12) + comboCritBonus
+  // v0.3.5: Overdrive nudges crit chance up (part of the "everything is amazing"
+  // window), on top of the decay-rescue and combo bonuses.
+  const critChance = (wasDecaying ? 0.18 : 0.12) + comboCritBonus + (isOverdrive ? OVERDRIVE_CRIT_BONUS : 0)
   const isCrit = deterministicRoll(tapId * 2.71 + state.prestigeCount * 3.77) < critChance
   // Wallet gain (economy) is combo-independent — only crit scales it. Curve
   // pressure gets the full combo multiplier, so the chain surfs the chart faster
-  // without inflating upgrade income.
+  // without inflating upgrade income. v0.3.5: Overdrive adds a modest curve boost
+  // — enough to reward mastery, small enough to keep the 2–4 min pacing intact.
   const walletGain = isCrit ? baseGain * 3 : baseGain
-  const curveGain = walletGain * comboMultiplier
+  const curveGain = walletGain * comboMultiplier * (isOverdrive ? OVERDRIVE_CURVE_BONUS : 1)
 
   let next: GameState = {
     ...state,
@@ -509,10 +563,16 @@ function sendCandle(state: GameState, now: number): GameState {
   // v0.3.4: a tap shoves the visual chart's velocity (impulse, not position) and
   // adds chart heat. A mini physics step runs immediately so the current candle
   // visibly reacts to this tap; the 120ms game tick keeps it alive between taps.
-  const tapImpulse = getChartTapImpulse(next, comboMultiplier, isCrit)
+  // v0.3.5: streak-mastery states make the tap punchier and safer. Supercharge
+  // hits harder and cooks slower; Overdrive hits harder still and cannot overheat.
+  const impulseScale = isOverdrive ? OVERDRIVE_IMPULSE_SCALE : isSupercharged ? SUPERCHARGE_IMPULSE_SCALE : 1
+  const heatScale = isOverdrive ? 0 : isSupercharged ? SUPERCHARGE_HEAT_SCALE : 1
+  const tapImpulse = getChartTapImpulse(next, comboMultiplier, isCrit) * impulseScale
   next = advanceChartState(next, CHART_TAP_STEP, {
     impulse: tapImpulse,
     heatAdd: CHART_HEAT_PER_TAP + (isCrit ? 4 : 0),
+    heatScale,
+    noReversal: isOverdrive,
     frictionScale: getChartFrictionScale(comboMultiplier),
     gravityScale: getChartGravityScale(next),
   })
@@ -534,6 +594,16 @@ function sendCandle(state: GameState, now: number): GameState {
   }
 
   next = stampStreakReward(next, combo)
+
+  // v0.3.5 fountain combat text. Crits are the loud moment (two bursts); a light
+  // "CHAIN N" burst every 15th link keeps the between-milestone stretches alive.
+  // Kept sparse on purpose — the component also caps particles as a backstop.
+  if (isCrit) {
+    next = pushFountain(next, 'CRIT CANDLE', 'crit')
+    next = pushFountain(next, `+${walletGain} Liquidity`, 'gain')
+  } else if (combo >= SUPERCHARGE_CHAIN_MIN && combo % 15 === 0 && !STREAK_REWARDS[combo]) {
+    next = pushFountain(next, `CHAIN ${combo}`, 'chain')
+  }
 
   if (next.taps % 12 === 0) {
     const loss = Math.floor(next.resources.liquidity * getJeetLossRatio(next))
@@ -683,9 +753,14 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
   // v0.3.4: advance the visual candle chart every tick. When the player isn't
   // tapping, gravity + friction pull it down; passive upgrades add a gentle idle
   // lift so the chart still "breathes" while you rest. Fully cosmetic.
+  // v0.3.5: during Overdrive the idle ticks between mashes must not cook heat or
+  // trigger a reversal either, or a fast masher's gaps would still punish them.
+  const overdriveActive = getIsOverdrive(state.overdriveUntil, now)
   const withChart: GameState = advanceChartState({ ...state, idleTicks }, dtSeconds, {
     gravityScale: getChartGravityScale(state),
     autoImpulse: getChartAutoImpulse(state),
+    heatScale: overdriveActive ? 0 : 1,
+    noReversal: overdriveActive,
   })
 
   // Never drift while onboarding (the prestige/graduation modal only opens at
@@ -747,6 +822,63 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
   return next
 }
 
+// v0.3.5 Supercharge / Overdrive meters. Runs once per tick AFTER Chart Gravity
+// (which is where an idle Candle Chain breaks), so it reads the freshly-updated
+// combo. Builds supercharge while the chain is alive (faster at higher combo
+// multipliers), bleeds it when broken, and arms a timed Overdrive window once the
+// meter has been pinned at full long enough. All cosmetic/feel — it never touches
+// the bonding curve here (Overdrive's small curve nudge lives in the tap path).
+function updateStreakMeters(state: GameState, now: number, dt: number): GameState {
+  const wasSupercharged = getIsSupercharged(state.supercharge)
+  const overdriveActive = getIsOverdrive(state.overdriveUntil, now)
+  const chainAlive = state.combo >= SUPERCHARGE_CHAIN_MIN
+
+  let supercharge = state.supercharge
+  let superchargeFullMs = state.superchargeFullMs
+  let overdriveUntil = state.overdriveUntil
+
+  // Overdrive just expired: clear the marker so the UI hides and meters resume.
+  if (overdriveUntil > 0 && !overdriveActive) {
+    overdriveUntil = 0
+  }
+
+  // Advance the meter — frozen (spent) for the duration of an active Overdrive.
+  if (overdriveActive) {
+    // hold at whatever it was reset to
+  } else if (chainAlive) {
+    supercharge = Math.min(SUPERCHARGE_MAX, supercharge + SUPERCHARGE_BUILD_PER_SEC * state.comboMultiplier * dt)
+  } else {
+    supercharge = Math.max(0, supercharge - SUPERCHARGE_DECAY_PER_SEC * dt)
+  }
+
+  const nowSupercharged = getIsSupercharged(supercharge)
+
+  // Arm Overdrive by holding the meter pinned at full with the chain still alive.
+  let armedThisTick = false
+  if (!overdriveActive && nowSupercharged && chainAlive) {
+    superchargeFullMs += dt * 1000
+    if (superchargeFullMs >= OVERDRIVE_ARM_MS) {
+      overdriveUntil = now + OVERDRIVE_DURATION_MS
+      supercharge = 0
+      superchargeFullMs = 0
+      armedThisTick = true
+    }
+  } else if (!overdriveActive) {
+    superchargeFullMs = 0
+  }
+
+  let next: GameState = { ...state, supercharge, superchargeFullMs, overdriveUntil }
+
+  if (armedThisTick) {
+    next = pushFountain(next, pickLine(OVERDRIVE_START_LINES, state.taps + state.combo), 'overdrive')
+    next = addTicker(next, 'OVERDRIVE ENGAGED — gravity has left the chat.')
+  } else if (!wasSupercharged && nowSupercharged && !overdriveActive) {
+    next = pushFountain(next, pickLine(SUPERCHARGE_ONLINE_LINES, state.taps + state.combo), 'supercharge')
+  }
+
+  return next
+}
+
 function runTick(state: GameState, now: number, dtSeconds = 1): GameState {
   let next = state
   const boundedDt = Math.max(0.05, Math.min(1, dtSeconds))
@@ -776,7 +908,10 @@ function runTick(state: GameState, now: number, dtSeconds = 1): GameState {
 
   // Chart Gravity runs every launched tick regardless of passive, so the idle
   // grace timer advances and decay can engage even with zero passive income.
-  return applyChartGravity(next, now, boundedDt)
+  next = applyChartGravity(next, now, boundedDt)
+
+  // v0.3.5: advance the Supercharge/Overdrive meters off the (now-updated) combo.
+  return updateStreakMeters(next, now, boundedDt)
 }
 
 export function gameReducer(state: GameState, action: GameAction): GameState {

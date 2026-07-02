@@ -10,6 +10,9 @@ interface FakeChartProps {
   milestoneLabel: string
   tapEffect: TapEffect | null
   isDecaying: boolean
+  // v0.3.5: streak-mastery aura states (visual only).
+  supercharged: boolean
+  overdrive: boolean
 }
 
 const TAP_FLASH_MS = 220
@@ -23,7 +26,16 @@ function priceToY(price: number): number {
   return HEIGHT - (Math.max(0, Math.min(100, price)) / 100) * HEIGHT
 }
 
-export function FakeChart({ chart, progress, tier, milestoneLabel, tapEffect, isDecaying }: FakeChartProps) {
+export function FakeChart({
+  chart,
+  progress,
+  tier,
+  milestoneLabel,
+  tapEffect,
+  isDecaying,
+  supercharged,
+  overdrive,
+}: FakeChartProps) {
   const clamped = Math.max(0, Math.min(100, progress))
 
   const [tapFlash, setTapFlash] = useState(false)
@@ -88,11 +100,13 @@ export function FakeChart({ chart, progress, tier, milestoneLabel, tapEffect, is
         milestonePulse ? 'milestone-pulse' : ''
       } ${dumping ? 'dumping' : ''} ${unstable ? 'unstable' : ''} ${isDecaying ? 'decaying' : ''} ${
         overheated ? 'overheated' : ''
-      }`}
+      } ${supercharged ? 'supercharged' : ''} ${overdrive ? 'overdrive' : ''}`}
       aria-label="Fake chart"
     >
       {gravityFlag ? <span className={`chart-gravity-flag ${gravityFlagKind}`}>{gravityFlag}</span> : null}
-      {overheated ? <span className="chart-overheat-flag">OVERHEATED — LET IT BREATHE</span> : null}
+      {/* v0.3.5: Overdrive overrides the overheat scold — mashing is safe here. */}
+      {overheated && !overdrive ? <span className="chart-overheat-flag">OVERHEATED — LET IT BREATHE</span> : null}
+      {overdrive ? <span className="chart-overdrive-flag">OVERDRIVE — GRAVITY HAS LEFT THE CHAT</span> : null}
       <div className="chart-header">
         <span className={`surf-zone-label surf-${zone.zone}`}>
           {zone.label} · {Math.round(chart.price)}

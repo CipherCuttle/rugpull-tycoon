@@ -33,6 +33,38 @@ export const COMBO_WINDOW_MS = 850
 export const COMBO_BREAK_MS = 1000
 export const COMBO_MAX_MULTIPLIER = 3
 
+// --- v0.3.5 Supercharge / Overdrive constants ---
+// Supercharge meter runs 0–100. It builds every tick while the Candle Chain is
+// alive (combo ≥ CHAIN_MIN), scaled by the live combo multiplier, so a hot chain
+// fills it in ~5–7s and a lukewarm one in ~12s. It bleeds slowly on a broken
+// chain. At 100 the run is "Supercharged".
+export const SUPERCHARGE_MAX = 100
+export const SUPERCHARGE_CHAIN_MIN = 5
+export const SUPERCHARGE_BUILD_PER_SEC = 6
+export const SUPERCHARGE_DECAY_PER_SEC = 8
+// While Supercharged, mashing heat builds at this fraction (cooler), and taps hit
+// this much harder into the chart.
+export const SUPERCHARGE_HEAT_SCALE = 0.55
+export const SUPERCHARGE_IMPULSE_SCALE = 1.15
+// Hold Supercharge pinned at 100 (with the chain alive) this long to arm
+// Overdrive, which then runs for OVERDRIVE_DURATION_MS. Entering Overdrive spends
+// the meter back to 0, so it must be rebuilt for the next one.
+export const OVERDRIVE_ARM_MS = 4000
+export const OVERDRIVE_DURATION_MS = 8000
+// During Overdrive: no heat gain, no reversal, punchier taps, a small crit bump,
+// and a modest (not pace-breaking) curve boost.
+export const OVERDRIVE_IMPULSE_SCALE = 1.5
+export const OVERDRIVE_CRIT_BONUS = 0.1
+export const OVERDRIVE_CURVE_BONUS = 1.2
+
+export function getIsSupercharged(supercharge: number): boolean {
+  return supercharge >= SUPERCHARGE_MAX
+}
+
+export function getIsOverdrive(overdriveUntil: number, now: number): boolean {
+  return overdriveUntil > now
+}
+
 // --- v0.3 Chart Gravity constants ---
 // Idle seconds of grace before the curve begins to decay. Tapping resets the
 // counter, so any active play trivially outruns gravity.
