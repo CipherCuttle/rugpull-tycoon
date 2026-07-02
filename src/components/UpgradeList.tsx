@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { getUpgrade, UPGRADES } from '../data/upgrades'
+import { UPGRADES } from '../data/upgrades'
 import { getUpgradeCost } from '../game/economy'
 import { playSound } from '../game/sound'
-import type { UpgradeDefinition, GameState } from '../game/types'
+import type { UpgradeDefinition, UpgradeEffect, GameState } from '../game/types'
 
 interface UpgradeListProps {
   state: GameState
@@ -10,52 +10,85 @@ interface UpgradeListProps {
 }
 
 const FLASH_MS = 600
-const TOAST_MS = 2800
 
 function formatCost(value: number) {
   return value >= 1000 ? `${(value / 1000).toFixed(1)}K` : value.toString()
 }
 
-// Short, human effect tag shown on each operator row so the payoff is legible
-// at a glance instead of hidden inside flavor text.
-function effectLabel(upgrade: UpgradeDefinition): string {
-  switch (upgrade.effect) {
+// Role tag shown first on every row (subtask 5) so what a hire *does* is legible
+// before any flavor. Maps the raw effect key to the player-facing category.
+function roleTag(effect: UpgradeEffect): string {
+  switch (effect) {
     case 'click':
-      return `+${upgrade.effectValue} tap`
+      return 'TAP POWER'
     case 'passive':
-      return `+${upgrade.effectValue}/sec`
+      return 'PASSIVE'
     case 'hype':
-      return `+${Math.round(upgrade.effectValue * 100)}% hype`
+      return 'HYPE'
     case 'curve':
-      return `+${Math.round(upgrade.effectValue * 100)}% curve`
+      return 'CURVE'
     case 'cardChance':
-      return `+${(upgrade.effectValue * 100).toFixed(1)}% cards`
+      return 'CARDS'
     case 'jeetShield':
-      return `-${Math.round(upgrade.effectValue * 100)}% jeet loss`
+      return 'JEET SHIELD'
     case 'heatShield':
-      return `-${Math.round(upgrade.effectValue * 100)}% heat`
+      return 'HEAT'
     case 'allGains':
-      return `+${Math.round(upgrade.effectValue * 100)}% all gains`
+      return 'ALL GAINS'
     case 'decay':
-      return `-${upgrade.effectValue.toFixed(2)} gravity/sec`
+      return 'GRAVITY'
+    default:
+      return 'BOOST'
+  }
+}
+
+// Human-readable effect for an arbitrary magnitude, reused for both the
+// per-level ("next") value and the cumulative ("now") value.
+function formatEffect(effect: UpgradeEffect, value: number): string {
+  switch (effect) {
+    case 'click':
+      return `+${Math.round(value)} tap`
+    case 'passive':
+      return `+${value.toFixed(1)}/sec`
+    case 'hype':
+      return `+${Math.round(value * 100)}% hype`
+    case 'curve':
+      return `+${Math.round(value * 100)}% curve`
+    case 'cardChance':
+      return `+${(value * 100).toFixed(1)}% cards`
+    case 'jeetShield':
+      return `-${Math.round(value * 100)}% jeet loss`
+    case 'heatShield':
+      return `-${Math.round(value * 100)}% heat`
+    case 'allGains':
+      return `+${Math.round(value * 100)}% all gains`
+    case 'decay':
+      return `-${value.toFixed(2)} gravity/sec`
     default:
       return 'boost'
   }
 }
 
-// Rewarding + funny confirmation lines, rotated by the purchase effect id.
-const HIRE_LINES = [
-  'Onboarded with zero background checks.',
-  'Signed a contract nobody will honor.',
-  'Added to the payroll. Standards not included.',
-  'Cleared to operate. Ethics pending forever.',
-]
+function CurrentEffect({ upgrade, level }: { upgrade: UpgradeDefinition; level: number }) {
+  const perLevel = formatEffect(upgrade.effect, upgrade.effectValue)
+
+  return (
+    <div className="upgrade-effect-line">
+      <span className="upgrade-role">{roleTag(upgrade.effect)}</span>
+      <span className="upgrade-effect-now">
+        {level > 0 ? formatEffect(upgrade.effect, upgrade.effectValue * level) : 'not hired yet'}
+      </span>
+      <span className="upgrade-effect-next">{perLevel}/lv</span>
+    </div>
+  )
+}
 
 export function UpgradeList({ state, onBuy }: UpgradeListProps) {
   const [flashUpgradeId, setFlashUpgradeId] = useState<string | null>(null)
-  const [toast, setToast] = useState<{ id: number; upgradeId: string } | null>(null)
   const lastPurchaseId = useRef<number | null>(null)
 
+  // Row pulse only — the non-blocking purchase toast is handled globally by
+  // ToastHost so it shows regardless of which drawer is open (subtask 1/6).
   useEffect(() => {
     const effect = state.lastPurchaseEffect
 
@@ -65,18 +98,11 @@ export function UpgradeList({ state, onBuy }: UpgradeListProps) {
 
     lastPurchaseId.current = effect.id
     setFlashUpgradeId(effect.upgradeId)
-    setToast({ id: effect.id, upgradeId: effect.upgradeId })
 
     const flashTimeout = window.setTimeout(() => setFlashUpgradeId(null), FLASH_MS)
-    const toastTimeout = window.setTimeout(() => setToast(null), TOAST_MS)
 
-    return () => {
-      window.clearTimeout(flashTimeout)
-      window.clearTimeout(toastTimeout)
-    }
+    return () => window.clearTimeout(flashTimeout)
   }, [state.lastPurchaseEffect])
-
-  const toastUpgrade = toast ? getUpgrade(toast.upgradeId) : null
 
   function handleBuy(upgradeId: string) {
     playSound('upgrade')
@@ -107,8 +133,8 @@ export function UpgradeList({ state, onBuy }: UpgradeListProps) {
                   <strong>{upgrade.name}</strong>
                   <span>Lv {level}</span>
                 </div>
+                <CurrentEffect upgrade={upgrade} level={level} />
                 <p>{upgrade.description}</p>
-                <span className="upgrade-effect">{effectLabel(upgrade)}</span>
               </div>
               <button type="button" disabled={!canBuy} onClick={() => handleBuy(upgrade.id)}>
                 Buy {formatCost(cost)}
@@ -117,15 +143,6 @@ export function UpgradeList({ state, onBuy }: UpgradeListProps) {
           )
         })}
       </div>
-
-      {toastUpgrade && toast ? (
-        <div className="purchase-toast" key={toast.id} role="status">
-          <span className="modal-kicker">Operator Hired</span>
-          <strong>{toastUpgrade.name}</strong>
-          <p>{HIRE_LINES[toast.id % HIRE_LINES.length]}</p>
-          <span className="toast-effect">{effectLabel(toastUpgrade)}</span>
-        </div>
-      ) : null}
     </section>
   )
 }

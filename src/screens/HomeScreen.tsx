@@ -1,6 +1,5 @@
 import { useState, type Dispatch } from 'react'
 import { CardAlbum } from '../components/CardAlbum'
-import { CardRevealModal } from '../components/CardRevealModal'
 import { DevTuningStats } from '../components/DevTuningStats'
 import { EventPanel } from '../components/EventPanel'
 import { FakeChart } from '../components/FakeChart'
@@ -9,6 +8,7 @@ import { OnboardingOverlay } from '../components/OnboardingOverlay'
 import { PrestigeModal } from '../components/PrestigeModal'
 import { ResourceBar } from '../components/ResourceBar'
 import { TickerFeed } from '../components/TickerFeed'
+import { ToastHost } from '../components/ToastHost'
 import { UpgradeList } from '../components/UpgradeList'
 import { formatNumber } from '../game/format'
 import { getMilestoneLabel, getNextObjective } from '../game/objective'
@@ -38,6 +38,15 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
 
   const milestoneLabel = getMilestoneLabel(state.bondingCurveTier)
   const objective = getNextObjective(state)
+
+  function openDrawer(next: Drawer) {
+    setDrawer(next)
+
+    // Opening the Cards drawer clears the "new evidence" badge.
+    if (next === 'cards' && state.newCardCount > 0) {
+      dispatch({ type: 'ACK_CARDS' })
+    }
+  }
 
   function handleResetSave() {
     const confirmed = window.confirm('Delete this save and start a brand-new basement launch? This cannot be undone.')
@@ -71,13 +80,14 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         milestoneLabel={milestoneLabel}
         tapEffect={state.lastTapEffect}
         isDecaying={state.isDecaying}
+        surfPressure={state.surfPressure}
       />
 
       {/* 3. MAIN ACTION AREA */}
       <MainActionButton
         state={state}
         onLaunch={() => dispatch({ type: 'LAUNCH_COIN' })}
-        onSend={() => dispatch({ type: 'SEND_CANDLE' })}
+        onSend={() => dispatch({ type: 'SEND_CANDLE', now: Date.now() })}
         onGraduateClick={() => setPrestigeOpen(true)}
       />
 
@@ -93,13 +103,14 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         </div>
 
         <nav className="drawer-tabs" aria-label="Bottom drawers">
-          <button className={drawer === 'upgrades' ? 'active' : ''} type="button" onClick={() => setDrawer('upgrades')}>
+          <button className={drawer === 'upgrades' ? 'active' : ''} type="button" onClick={() => openDrawer('upgrades')}>
             Upgrades
           </button>
-          <button className={drawer === 'cards' ? 'active' : ''} type="button" onClick={() => setDrawer('cards')}>
+          <button className={drawer === 'cards' ? 'active' : ''} type="button" onClick={() => openDrawer('cards')}>
             Cards
+            {state.newCardCount > 0 ? <span className="tab-badge">{state.newCardCount}</span> : null}
           </button>
-          <button className={drawer === 'event' ? 'active' : ''} type="button" onClick={() => setDrawer('event')}>
+          <button className={drawer === 'event' ? 'active' : ''} type="button" onClick={() => openDrawer('event')}>
             Event
           </button>
         </nav>
@@ -135,8 +146,8 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         onComplete={() => dispatch({ type: 'COMPLETE_ONBOARDING' })}
       />
 
-      {/* 5. Card reveal modal, mounted once regardless of active drawer */}
-      <CardRevealModal pendingCardReveal={state.pendingCardReveal} />
+      {/* 5. Non-blocking toast host: evidence, hires, chain celebrations. */}
+      <ToastHost toast={state.toast} />
 
       {/* Dev-only tuning readout (stripped from production builds). */}
       {import.meta.env.DEV ? <DevTuningStats state={state} /> : null}

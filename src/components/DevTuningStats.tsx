@@ -42,7 +42,10 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
   const remaining = Math.max(0, 100 - state.bondingCurveProgress)
   // Estimated time to graduation assuming a steady 3 taps/sec of active play
   // (idle never decays while tapping, so decay is excluded from the active rate).
-  const activeCurvePerSec = curvePerTap * 3
+  // ETA now factors the Candle Chain: curve pressure = base × combo multiplier.
+  // Assume a sustained x2 (typical continuous mashing) at 3 taps/sec.
+  const assumedMultiplier = 2
+  const activeCurvePerSec = curvePerTap * 3 * assumedMultiplier
   const etaSeconds = activeCurvePerSec > 0 ? Math.ceil(remaining / activeCurvePerSec) : Infinity
 
   return (
@@ -84,9 +87,11 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
           <div>tier floor: {floor}%</div>
           <div>idleTicks: {state.idleTicks} {state.isDecaying ? '(DECAYING)' : ''}</div>
           <div>decay/sec: {decayPerSec.toFixed(3)}%</div>
-          <div>curve/tap: {curvePerTap.toFixed(3)}%</div>
+          <div>curve/tap (x1): {curvePerTap.toFixed(3)}%</div>
           <div>passive/sec: {passiveCurvePerSec.toFixed(3)}% curve</div>
-          <div>ETA @3tps: {Number.isFinite(etaSeconds) ? `${etaSeconds}s` : '—'}</div>
+          <div>combo: {state.combo} (x{state.comboMultiplier.toFixed(1)}) max {state.maxComboThisRun}</div>
+          <div>surf: {state.surfPressure.toFixed(1)}</div>
+          <div>ETA @3tps·x2: {Number.isFinite(etaSeconds) ? `${etaSeconds}s` : '—'}</div>
           <div>taps (run): {state.taps}</div>
           <div>run time: {runSeconds}s</div>
         </div>

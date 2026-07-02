@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getTierFloor } from '../game/economy'
+import { getSurfZone, getTierFloor } from '../game/economy'
 import { chartPath } from '../game/tick'
 import type { TapEffect } from '../game/types'
 
@@ -10,12 +10,13 @@ interface FakeChartProps {
   milestoneLabel: string
   tapEffect: TapEffect | null
   isDecaying: boolean
+  surfPressure: number
 }
 
 const TAP_FLASH_MS = 350
 const MILESTONE_PULSE_MS = 750
 
-export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect, isDecaying }: FakeChartProps) {
+export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect, isDecaying, surfPressure }: FakeChartProps) {
   const width = 360
   const height = 150
   const path = chartPath(points, width, height)
@@ -54,33 +55,31 @@ export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect, i
     return () => window.clearTimeout(timeout)
   }, [tier])
 
-  // Near-graduation instability: once the curve is almost full (but not yet
-  // done), the whole machine gets the shakes. `dumping` washes it red whenever
-  // the visible line is trending down.
-  const unstable = clamped >= 85 && clamped < 100
+  // v0.3.2 Surf zones. The chart is the surf/pressure meter now: the sparkline
+  // follows surfPressure, so `zone` drives coloring + the header label. The
+  // "Overheated"/"Graduation Push" zones get the shakes instead of keying purely
+  // off bonding-curve progress (which no longer sits pinned at max).
+  const zone = getSurfZone(surfPressure)
+  const unstable = zone.zone === 'overheated' || zone.zone === 'graduation'
   const dumping = !isUp
 
   // v0.3 Chart Gravity: a floor marker showing what the current milestone
   // permanently protects, plus a status flag communicating decay vs. held.
   const floor = getTierFloor(tier)
   const atFloor = floor > 0 && clamped <= floor + 0.15 && clamped < 100
-  const gravityFlag = isDecaying
-    ? '▼ CURVE BLEEDING'
-    : atFloor
-      ? 'MILESTONE HELD'
-      : null
+  const gravityFlag = isDecaying ? '▼ CURVE BLEEDING' : atFloor ? 'MILESTONE HELD' : null
   const gravityFlagKind = isDecaying ? 'bleeding' : 'held'
 
   return (
     <section
-      className={`chart-panel hero-chart ${tapFlash ? 'tap-flash' : ''} ${milestonePulse ? 'milestone-pulse' : ''} ${
-        dumping ? 'dumping' : ''
-      } ${unstable ? 'unstable' : ''} ${isDecaying ? 'decaying' : ''}`}
+      className={`chart-panel hero-chart surf-${zone.zone} ${tapFlash ? 'tap-flash' : ''} ${
+        milestonePulse ? 'milestone-pulse' : ''
+      } ${dumping ? 'dumping' : ''} ${unstable ? 'unstable' : ''} ${isDecaying ? 'decaying' : ''}`}
       aria-label="Fake chart"
     >
       {gravityFlag ? <span className={`chart-gravity-flag ${gravityFlagKind}`}>{gravityFlag}</span> : null}
       <div className="chart-header">
-        <span>{milestoneLabel}</span>
+        <span className={`surf-zone-label surf-${zone.zone}`}>{zone.label}</span>
         <strong className={isUp ? 'chart-up' : 'chart-down'}>{isUp ? 'UP ONLY' : 'DUMPING'}</strong>
       </div>
       <svg className="fake-chart" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Fictional chart">
@@ -96,6 +95,7 @@ export function FakeChart({ points, progress, tier, milestoneLabel, tapEffect, i
         <line x1="0" x2={width} y1="72" y2="72" stroke="#282828" strokeDasharray="7 8" />
       </svg>
       <div className={`curve-rail ${isDecaying ? 'decaying' : ''}`} aria-label="Bonding curve progress">
+        <span className="curve-rail-label">{milestoneLabel}</span>
         <div className="curve-rail-track">
           <div className="curve-rail-fill" style={{ width: `${clamped}%` }} />
           {floor > 0 ? (

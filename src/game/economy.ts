@@ -9,8 +9,52 @@ import type { GameState } from './types'
 // upgrades, so the button keeps its punchy feel while Chart Gravity has room to
 // actually matter between taps. Existing saves keep their 0–100% progress; only
 // forward pacing changes, so this is save-compatible.
-export const BONDING_CURVE_TARGET_LIQUIDITY = 13000
+// v0.3.2 Chart Surf Combo: raised from 13000 so a *base* (x1 combo) tap fills the
+// curve more slowly, leaving room for the Candle Chain multiplier to restore the
+// pace. Curve pressure per tap = wallet gain × comboMultiplier, so normal mashing
+// (which sustains ~x1.5–x2) lands first graduation back in the ~2–4 min band,
+// while a dedicated masher holding x3 is faster but not absurd. Wallet Liquidity
+// income is unchanged, so upgrade affordability/pacing is identical to v0.3.1.
+//
+// Tuned via the headless sim (see memory headless-economy-sim): continuous
+// tapping saturates the chain to x3 within a few seconds, so effective pace ≈
+// base ÷ 3. At 42000, normal play (3 taps/s) graduates in ~3 min, a casual 2/s
+// in ~3.8 min, and a 5/s masher in ~1.8 min — the 2–4 min band with a faster,
+// non-absurd ceiling. Save-compatible (only forward pace changes; progress is
+// stored 0–100%).
+export const BONDING_CURVE_TARGET_LIQUIDITY = 42000
 export const COPE_CRATE_COST = 4
+
+// --- v0.3.2 Candle Chain combo constants ---
+// A tap landing within this window (ms) of the previous one continues the chain;
+// a later tap resets it to 1. Ticks break an idle chain after COMBO_BREAK_MS.
+export const COMBO_WINDOW_MS = 900
+export const COMBO_BREAK_MS = 1200
+export const COMBO_MAX_MULTIPLIER = 3
+
+// --- v0.3.2 Surf Pressure constants (feel/visual only, not economy) ---
+// Per-tap push into the surf meter. It scales with combo, then soft-caps as the
+// meter gets hot so hard mashing can flash into Graduation Push without pinning
+// the chart at 100: raw push = BASE + mult×PER, effective push = raw×scale.
+// Decay is split so the meter reads cleanly:
+//   - while actively tapping, a gentle proportional decay gives a shallow
+//     sawtooth whose equilibrium tracks tap rate (~casual→Warming, normal→Surf,
+//     masher→Overheated/Graduation), so the zone label is informative not flickery;
+//   - once idle (no tap within SURF_IDLE_MS), a much stronger decay makes the
+//     line visibly drift down within a few seconds — "stopping causes drift".
+export const SURF_TAP_PUSH_BASE = 2.3
+export const SURF_TAP_PUSH_PER_MULT = 1.35
+export const SURF_ACTIVE_DECAY = 0.085
+export const SURF_IDLE_DECAY = 0.5
+export const SURF_IDLE_FLAT = 6
+export const SURF_IDLE_MS = 900
+// A jeet raid knocks the surf line down by a fraction of its current height (a
+// visible dip that recovers in a couple of seconds), rather than a flat amount
+// that would wipe the whole meter at this scale.
+export const SURF_JEET_DAMP = 0.8
+
+const SURF_TAP_SOFT_CAP = 140
+const SURF_TAP_MIN_SCALE = 0.2
 
 // --- v0.3 Chart Gravity constants ---
 // Idle ticks (1s each) of grace before the curve begins to decay. Tapping
@@ -31,6 +75,59 @@ export const TIER_FLOORS = [0, 25, 50, 75, 100]
 // How close (in curve-%) to the current floor counts as "near the floor" for
 // the panic UI while decaying.
 export const NEAR_FLOOR_MARGIN = 3
+
+// v0.3.2 Candle Chain multiplier tiers. Builds quickly (a real masher passes 20
+// in a few seconds) and caps at x3. Applied to curve pressure + crit chance only.
+export function getComboMultiplier(combo: number): number {
+  if (combo >= 35) {
+    return 3.0
+  }
+
+  if (combo >= 20) {
+    return 2.0
+  }
+
+  if (combo >= 10) {
+    return 1.5
+  }
+
+  if (combo >= 5) {
+    return 1.2
+  }
+
+  return 1.0
+}
+
+// Per-tap surf push, bigger the hotter your chain — this is what pushes normal
+// mashing into the Surf zone and combo mashing into Overheated/Graduation Push.
+export function getSurfTapPush(comboMultiplier: number, currentPressure = 0): number {
+  const rawPush = SURF_TAP_PUSH_BASE + comboMultiplier * SURF_TAP_PUSH_PER_MULT
+  const softCapScale = Math.max(SURF_TAP_MIN_SCALE, 1 - currentPressure / SURF_TAP_SOFT_CAP)
+
+  return rawPush * softCapScale
+}
+
+export type SurfZone = 'dead' | 'warming' | 'surf' | 'overheated' | 'graduation'
+
+export interface SurfZoneInfo {
+  zone: SurfZone
+  label: string
+}
+
+const SURF_ZONE_LABELS: Record<SurfZone, string> = {
+  dead: 'Dead Coin',
+  warming: 'Warming Up',
+  surf: 'Surf Zone',
+  overheated: 'Overheated',
+  graduation: 'Graduation Push',
+}
+
+export function getSurfZone(pressure: number): SurfZoneInfo {
+  const zone: SurfZone =
+    pressure >= 84 ? 'graduation' : pressure >= 74 ? 'overheated' : pressure >= 55 ? 'surf' : pressure >= 25 ? 'warming' : 'dead'
+
+  return { zone, label: SURF_ZONE_LABELS[zone] }
+}
 
 export function getBondingCurveTier(progress: number): number {
   if (progress >= 100) {

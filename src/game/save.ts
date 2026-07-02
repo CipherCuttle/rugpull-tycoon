@@ -55,6 +55,16 @@ function migrateGameState(value: GameState): GameState {
     // why SAVE_VERSION is NOT bumped for this.
     idleTicks: raw.idleTicks ?? 0,
     isDecaying: raw.isDecaying ?? false,
+    // v0.3.2 Chart Surf Combo fields. Also additive: an old save loads with a
+    // cold chain (combo 0, x1), no surf pressure, and an empty toast/badge — all
+    // of which the next tap/tick fills in normally.
+    combo: raw.combo ?? 0,
+    comboMultiplier: raw.comboMultiplier ?? 1,
+    lastTapAt: raw.lastTapAt ?? 0,
+    maxComboThisRun: raw.maxComboThisRun ?? 0,
+    surfPressure: raw.surfPressure ?? 0,
+    toast: raw.toast ?? null,
+    newCardCount: raw.newCardCount ?? 0,
   }
 }
 

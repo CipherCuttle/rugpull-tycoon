@@ -1203,7 +1203,261 @@ h2 {
   color: var(--acid);
 }
 
+/* =====================================================================
+   v0.3.2 Chart Surf Combo — Candle Chain button, surf zones, global toast,
+   upgrade roles, tab badge.
+   ===================================================================== */
+
+/* --- Candle Chain: button intensity rises with the multiplier tier. Guarded
+   with :not() so the decay/panic/graduate pressure states keep priority. --- */
+.main-action.chain-t1:not(.decaying):not(.panic):not(.graduate-ready) {
+  box-shadow: 0 9px 0 #1c5c34, 0 20px 46px rgba(70, 255, 155, 0.4);
+}
+
+.main-action.chain-t2:not(.decaying):not(.panic):not(.graduate-ready) {
+  box-shadow: 0 9px 0 #1c5c34, 0 0 0 2px rgba(182, 255, 74, 0.4), 0 20px 50px rgba(70, 255, 155, 0.5);
+  animation: chain-throb 640ms ease-in-out infinite;
+}
+
+.main-action.chain-t3:not(.decaying):not(.panic):not(.graduate-ready) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent 55%),
+    linear-gradient(135deg, var(--acid-2), var(--acid) 55%, var(--amber));
+  box-shadow: 0 9px 0 #4a5c1c, 0 0 0 2px rgba(182, 255, 74, 0.6), 0 20px 54px rgba(182, 255, 74, 0.55);
+  animation: chain-throb 520ms ease-in-out infinite;
+}
+
+.main-action.chain-t4:not(.decaying):not(.panic):not(.graduate-ready) {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), transparent 52%),
+    linear-gradient(135deg, var(--amber), var(--acid-2) 60%, var(--acid));
+  box-shadow: 0 9px 0 #4a5c1c, 0 0 0 3px rgba(255, 194, 58, 0.7), 0 0 44px rgba(70, 255, 155, 0.6),
+    0 22px 58px rgba(255, 194, 58, 0.4);
+  animation: chain-throb 380ms ease-in-out infinite;
+}
+
+/* Chain about to break: an amber warning ring + urgent subtitle. */
+.main-action.chain-risk:not(.decaying):not(.panic) {
+  box-shadow: 0 9px 0 #7a5314, 0 0 0 2px rgba(255, 194, 58, 0.7), 0 18px 40px rgba(255, 194, 58, 0.35);
+  animation: chain-break-warn 300ms steps(1) infinite;
+}
+
+.main-action.chain-risk small {
+  color: #2a1c04;
+  font-weight: 900;
+}
+
+/* Floating "CHAIN ×N" chip above the tap gain. */
+.tap-float-chain {
+  color: var(--amber);
+  font-size: 0.82rem;
+  font-weight: 1000;
+  letter-spacing: 0.04em;
+  text-shadow: 0 0 12px rgba(255, 194, 58, 0.7);
+  animation: float-up-micro 1100ms ease-out forwards;
+}
+
+/* --- Surf zones on the hero chart: tint the panel + zone label per zone. --- */
+.surf-zone-label {
+  font-weight: 900 !important;
+}
+
+.hero-chart.surf-dead {
+  border-color: var(--line-strong);
+}
+.surf-zone-label.surf-dead {
+  color: var(--faint) !important;
+}
+
+.hero-chart.surf-warming {
+  border-color: rgba(255, 194, 58, 0.35);
+}
+.surf-zone-label.surf-warming {
+  color: var(--amber) !important;
+}
+
+.hero-chart.surf-surf {
+  border-color: rgba(70, 255, 155, 0.6);
+  box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 0 26px rgba(70, 255, 155, 0.18);
+}
+.surf-zone-label.surf-surf {
+  color: var(--acid) !important;
+  text-shadow: 0 0 12px rgba(70, 255, 155, 0.5);
+}
+
+.hero-chart.surf-overheated {
+  border-color: rgba(255, 107, 82, 0.6);
+  box-shadow: var(--shadow), 0 0 30px rgba(255, 107, 82, 0.22);
+}
+.surf-zone-label.surf-overheated {
+  color: var(--red-2) !important;
+}
+
+.hero-chart.surf-graduation {
+  border-color: rgba(255, 194, 58, 0.75);
+  box-shadow: var(--shadow), 0 0 36px rgba(255, 194, 58, 0.3);
+}
+.surf-zone-label.surf-graduation {
+  color: var(--amber) !important;
+  text-shadow: 0 0 14px rgba(255, 194, 58, 0.7);
+}
+
+/* Small milestone-progress label prefixed on the bonding-curve rail (the zone
+   label moved into the chart header). */
+.curve-rail-label {
+  flex: 0 0 auto;
+  max-width: 34%;
+  overflow: hidden;
+  color: var(--acid-2);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* --- Global non-blocking toast (evidence / hire / chain celebration). --- */
+.toast {
+  position: fixed;
+  bottom: 96px;
+  left: 50%;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(88%, 360px);
+  padding: 10px 12px 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--acid);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--panel-3), var(--panel));
+  box-shadow: var(--shadow);
+  transform: translateX(-50%);
+  animation: toast-in 220ms cubic-bezier(0.2, 1.4, 0.4, 1);
+  pointer-events: none;
+}
+
+.toast-chip {
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 0.56rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.toast-title {
+  color: var(--ink);
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+.toast-line {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+
+.toast-evidence {
+  border-left-color: var(--cyan);
+}
+.toast-evidence .toast-chip {
+  color: var(--cyan);
+}
+
+.toast-operator {
+  border-left-color: var(--acid);
+}
+.toast-operator .toast-chip {
+  color: var(--acid);
+}
+
+.toast-chain {
+  border-left-color: var(--amber);
+  box-shadow: var(--shadow), 0 0 26px rgba(255, 194, 58, 0.28);
+}
+.toast-chain .toast-chip {
+  color: var(--amber);
+}
+.toast-chain .toast-title {
+  color: var(--amber);
+  text-shadow: 0 0 12px rgba(255, 194, 58, 0.5);
+}
+
+/* --- Cards-tab "new evidence" badge. --- */
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--red);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 900;
+  vertical-align: middle;
+}
+
+/* --- Upgrade role + effect line (mechanics before flavor). --- */
+.upgrade-effect-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.upgrade-role {
+  padding: 2px 6px;
+  border: 1px solid rgba(70, 255, 155, 0.4);
+  border-radius: 4px;
+  background: rgba(70, 255, 155, 0.08);
+  color: var(--acid);
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+}
+
+.upgrade-effect-now {
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.upgrade-effect-next {
+  color: var(--faint);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
 /* --- Keyframes (first ones in this project) --- */
+
+@keyframes chain-throb {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes chain-break-warn {
+  0%,
+  100% {
+    box-shadow: 0 9px 0 #7a5314, 0 0 0 2px rgba(255, 194, 58, 0.7), 0 18px 40px rgba(255, 194, 58, 0.35);
+  }
+  50% {
+    box-shadow: 0 9px 0 #7a5314, 0 0 0 2px rgba(255, 59, 82, 0.7), 0 18px 40px rgba(255, 59, 82, 0.35);
+  }
+}
 
 @keyframes button-pulse {
   0% {

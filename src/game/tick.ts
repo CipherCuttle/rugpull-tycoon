@@ -1,7 +1,10 @@
-export function nextChartPoint(points: number[], delta: number) {
-  const last = points.at(-1) ?? 28
+// v0.3.2: the chart line now visualizes Surf Pressure directly. Each tap/tick
+// appends the current surf value (with a little deterministic wobble so the line
+// has texture), so the sparkline oscillates and drifts instead of ratcheting to
+// the 96 ceiling the old delta model pinned it at.
+export function nextChartPoint(points: number[], surfPressure: number) {
   const wobble = ((points.length * 17) % 9) - 4
-  const next = Math.max(4, Math.min(96, last + delta + wobble * 0.35))
+  const next = Math.max(4, Math.min(96, surfPressure + wobble * 0.4))
 
   return [...points.slice(-31), Number(next.toFixed(2))]
 }

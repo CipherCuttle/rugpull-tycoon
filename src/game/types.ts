@@ -110,6 +110,19 @@ export interface MajorEvent {
   line: string
 }
 
+// v0.3.2 Chart Surf Combo: a single non-blocking toast slot. The reducer stamps
+// the newest toast-worthy event here (evidence found, operator hired, chain
+// tier-up); the UI shows exactly one at a time and auto-dismisses. Because each
+// new event overwrites the field, "one toast at a time" falls out for free.
+export type ToastKind = 'evidence' | 'operator' | 'chain'
+
+export interface ToastEffect {
+  id: number
+  kind: ToastKind
+  title: string
+  line: string
+}
+
 export interface GameState {
   saveVersion: number
   resources: ResourceState
@@ -122,6 +135,18 @@ export interface GameState {
   // tick where progress actually dropped, so the UI can react.
   idleTicks: number
   isDecaying: boolean
+  // v0.3.2 Candle Chain combo. `combo` counts consecutive in-window taps;
+  // `comboMultiplier` is the derived tier multiplier (x1..x3, cached for the UI
+  // and reducer). `lastTapAt` is the ms timestamp of the last tap, used to keep
+  // or break the chain across taps (SEND_CANDLE.now) and ticks (TICK.now).
+  combo: number
+  comboMultiplier: number
+  lastTapAt: number
+  maxComboThisRun: number
+  // v0.3.2 Surf Pressure: a fast 0–100 meter that rises with taps (scaled by
+  // combo) and decays every tick. It drives the oscillating chart + zones and is
+  // deliberately isolated from the economy (combo drives the curve, not surf).
+  surfPressure: number
   upgrades: Record<string, number>
   cards: Record<string, number>
   event: EventState
@@ -137,6 +162,11 @@ export interface GameState {
   lastTapEffect: TapEffect | null
   lastPurchaseEffect: PurchaseEffect | null
   pendingCardReveal: CardRevealEffect | null
+  // v0.3.2: newest non-blocking toast (evidence / operator / chain tier-up).
+  toast: ToastEffect | null
+  // Count of new evidence cards found since the Cards drawer was last opened,
+  // surfaced as a badge. Cleared by ACK_CARDS.
+  newCardCount: number
   majorEvent: MajorEvent | null
   effectSeq: number
   lastOutcome?: string
@@ -145,10 +175,11 @@ export interface GameState {
 
 export type GameAction =
   | { type: 'LAUNCH_COIN' }
-  | { type: 'SEND_CANDLE' }
+  | { type: 'SEND_CANDLE'; now: number }
   | { type: 'BUY_UPGRADE'; upgradeId: string }
   | { type: 'OPEN_COPE_CRATE' }
   | { type: 'GRADUATE_COIN' }
   | { type: 'TICK'; now: number }
   | { type: 'COMPLETE_ONBOARDING' }
+  | { type: 'ACK_CARDS' }
   | { type: 'RESET_SAVE' }
