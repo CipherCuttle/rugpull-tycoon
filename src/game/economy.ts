@@ -1,7 +1,7 @@
 import { CARDS } from '../data/cards'
 import { getUpgrade, UPGRADES } from '../data/upgrades'
 import { CHART_TAP_IMPULSE_BASE } from './chart'
-import type { GameState, TapRating } from './types'
+import type { GameState, ResistancePhase, TapRating } from './types'
 
 // v0.3.1 Economy Tuning: the amount of *curve-driving* Liquidity needed to fill
 // the bonding curve from 0→100%. Raised 13× from v0.3 (was 1000) so a full
@@ -459,16 +459,20 @@ export function getTapRatingRewardScale(rating: TapRating | null): number {
   }
 }
 
+// v0.4D: perfect/good heat-add trimmed further (0.75→0.62, 1.0→0.85) so a
+// deliberate timed rhythm can sit near resistance without cooking itself out of
+// the zone; weak/rejected bumped up (1.3→1.4, 1.7→1.8) to keep the spam-vs-timed
+// heat gap at least as wide as before, not narrower.
 export function getTapRatingHeatScale(rating: TapRating | null): number {
   switch (rating) {
     case 'perfect':
-      return 0.75
+      return 0.62
     case 'good':
-      return 1.0
+      return 0.85
     case 'weak':
-      return 1.3
+      return 1.4
     case 'rejected':
-      return 1.7
+      return 1.8
     case 'overheated':
       return 2.0
     default:
@@ -476,12 +480,16 @@ export function getTapRatingHeatScale(rating: TapRating | null): number {
   }
 }
 
+// v0.4D: good's impulse bumped (1.0→1.12) so a well-timed (not just perfect) tap
+// pushes noticeably harder — weak/rejected/overheated (the spam-ish outcomes)
+// are untouched, so this only rewards taps that were already reading as "on
+// target", not raw tap volume.
 export function getTapRatingImpulseScale(rating: TapRating | null): number {
   switch (rating) {
     case 'perfect':
-      return 1.1
+      return 1.15
     case 'good':
-      return 1.0
+      return 1.12
     case 'weak':
       return 0.65
     case 'rejected':
@@ -491,4 +499,16 @@ export function getTapRatingImpulseScale(rating: TapRating | null): number {
     default:
       return 1.0
   }
+}
+
+// v0.4D Resistance Surf: while the chart is actively holding station near a live
+// resistance target (approaching/smash), gravity eases off a bit so a controlled
+// tap rhythm can ride the line instead of needing panic-mash cadence to fight the
+// fall. Reverts to full gravity the instant the target flips to rejected/
+// overheated, so mashing through TOO HOT still dumps the chart at full force —
+// the ease is a reward for engaging cleanly, not a blanket softener.
+export const RESISTANCE_APPROACH_GRAVITY_SCALE = 0.82
+
+export function getResistancePhaseGravityScale(phase: ResistancePhase): number {
+  return phase === 'approaching' || phase === 'smash' ? RESISTANCE_APPROACH_GRAVITY_SCALE : 1
 }

@@ -48,6 +48,7 @@ import {
   getJeetLossRatio,
   getPassiveGainPerSecond,
   getPrestigeReward,
+  getResistancePhaseGravityScale,
   getTapRatingHeatScale,
   getTapRatingImpulseScale,
   getTapRatingRewardScale,
@@ -212,14 +213,16 @@ function stampToast(state: GameState, kind: ToastKind, title: string, line: stri
   return { ...state, effectSeq: seq, toast: { id: seq, kind, title, line } }
 }
 
+// v0.4D: dropped the combo-5/10 (×1.2/×1.5) entries entirely — those landed
+// within ~1.5s of a run starting and read as hype before the player had done
+// anything. The first beat now lands at the ×2.0 tier; everything before it is
+// quiet. See [[v04d-resistance-surf-text]].
 const STREAK_REWARDS: Record<number, { title: string; line: string }> = {
-  5: { title: 'CHAIN STARTED', line: '×1.2 CURVE PUSH · SURF PRESSURE BOOSTED' },
-  10: { title: 'NICE CANDLE', line: '×1.5 CURVE PUSH · CRIT CHANCE UP' },
-  20: { title: 'SURFING THE LIE', line: '×2.0 CURVE PUSH · CRIT CHANCE UP' },
-  35: { title: "JEETS CAN'T KEEP UP", line: '×3.0 CURVE PUSH · SUPERCHARGE CLIMBING' },
-  50: { title: 'GRAVITY CLOCKED OUT', line: '×3.0 CURVE PUSH LOCKED' },
+  20: { title: 'CHAIN ×2', line: '2.0× CURVE PUSH · CRIT CHANCE UP' },
+  35: { title: 'CHAIN ×3 — MAX', line: '3.0× CURVE PUSH LOCKED' },
+  50: { title: 'ON FIRE', line: 'SUPERCHARGE CLIMBING' },
   75: { title: 'SUPERCHARGE ONLINE', line: 'CRIT CHANCE UP · OVERDRIVE INCOMING' },
-  100: { title: 'THE CHART IS LYING BEAUTIFULLY', line: '×3.0 CURVE PUSH · KEEP THE CHAIN ALIVE' },
+  100: { title: 'THE CHART IS LYING BEAUTIFULLY', line: 'KEEP THE CHAIN ALIVE' },
 }
 
 // v0.3.5 Streak Fountain. Newest event appended to a capped ring; the
@@ -599,9 +602,13 @@ function resolveResistanceTap(
       next.breakoutQualityScore + (perfect ? BREAKOUT_QUALITY_GAIN_PERFECT : BREAKOUT_QUALITY_GAIN_GOOD),
     )
     next = { ...next, supercharge: Math.min(SUPERCHARGE_MAX, next.supercharge + superchargeGain), breakoutQualityScore }
-    next = pushFountain(next, perfect ? 'BREAKOUT PERFECT' : 'GOOD BREAKOUT', 'breakout')
-    if (streak >= 2) {
-      next = pushFountain(next, `CHAIN ×${streak}`, 'chain')
+    // v0.4D: the compact Supercharge-rail reward chip (breakoutReward, below)
+    // already reports every breakout; a "GOOD BREAKOUT" fountain on top of it was
+    // pure duplication for the common case, and the chain streak now lives in the
+    // persistent combo badge instead of a floating line. Only PERFECT still gets
+    // its own fountain beat — it's rarer and earns the extra fanfare.
+    if (perfect) {
+      next = pushFountain(next, 'BREAKOUT PERFECT', 'breakout')
     }
     return {
       next,
@@ -762,7 +769,7 @@ function sendCandle(state: GameState, now: number): GameState {
       heatScale,
       noReversal: isOverdrive,
       frictionScale: getChartFrictionScale(comboMultiplier),
-      gravityScale: getChartGravityScale(next),
+      gravityScale: getChartGravityScale(next) * getResistancePhaseGravityScale(next.resistance.phase),
     },
     now,
   )
@@ -823,17 +830,17 @@ function sendCandle(state: GameState, now: number): GameState {
 
   next = stampStreakReward(next, combo)
 
-  // v0.3.5 fountain combat text. v0.4B: minor filler (crit sparkle, chain-length
-  // ticks) is reserved for the calm 'waiting' phase — once the player is actively
-  // engaging a resistance target (approaching/smash/broken/rejected/overheated)
-  // the loud breakout/reject text already owns the chart, so filler is suppressed
-  // instead of stacking on top of it. The "+N Liquidity" burst was dropped
-  // entirely — the button's own tap-float already shows that number per tap.
+  // v0.3.5 fountain combat text. v0.4B: minor filler (crit sparkle) is reserved
+  // for the calm 'waiting' phase — once the player is actively engaging a
+  // resistance target (approaching/smash/broken/rejected/overheated) the loud
+  // breakout/reject text already owns the chart, so filler is suppressed instead
+  // of stacking on top of it. The "+N Liquidity" burst was dropped entirely — the
+  // button's own tap-float already shows that number per tap. v0.4D: the periodic
+  // "CHAIN {combo}" tick (every 15 combo) was dropped too — it read as "chain +1"
+  // spam on top of the persistent combo badge, which now owns that signal.
   const showMinorFountain = state.resistance.phase === 'waiting'
   if (isCrit && showMinorFountain) {
     next = pushFountain(next, 'CRIT CANDLE', 'crit')
-  } else if (!isCrit && showMinorFountain && combo >= SUPERCHARGE_CHAIN_MIN && combo % 15 === 0 && !STREAK_REWARDS[combo]) {
-    next = pushFountain(next, `CHAIN ${combo}`, 'chain')
   }
 
   if (next.taps % 12 === 0) {
@@ -997,7 +1004,7 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
     { ...state, idleTicks },
     dtSeconds,
     {
-      gravityScale: getChartGravityScale(state),
+      gravityScale: getChartGravityScale(state) * getResistancePhaseGravityScale(prevPhase),
       autoImpulse: getChartAutoImpulse(state),
       heatScale: overdriveActive ? 0 : 1,
       noReversal: overdriveActive,

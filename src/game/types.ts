@@ -163,7 +163,6 @@ export interface StreakEffect {
 export type FountainKind =
   | 'gain'
   | 'crit'
-  | 'chain'
   | 'milestone'
   | 'supercharge'
   | 'overdrive'

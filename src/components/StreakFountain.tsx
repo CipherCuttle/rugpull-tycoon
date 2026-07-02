@@ -18,9 +18,12 @@ const PARTICLE_MS = 1300
 const MAX_PARTICLES = 8
 // v0.4B: loud, rare beats (breakout/reject/milestone/overdrive/supercharge) get
 // their own visible-count budget so they're never crowded out by filler; quiet
-// filler (crit sparkle, chain ticks) gets a smaller one of its own.
-const MAX_PROMINENT_VISIBLE = 3
-const MAX_MINOR_VISIBLE = 3
+// filler (crit sparkle) gets a smaller one of its own. v0.4D: prominent capped to
+// a single visible event at a time (was 3) — the design now wants at most one
+// major event text on screen, with the persistent combo badge and reward chip
+// covering everything else.
+const MAX_PROMINENT_VISIBLE = 1
+const MAX_MINOR_VISIBLE = 2
 
 interface Particle {
   id: number
@@ -46,7 +49,6 @@ const PROMINENT_KINDS = new Set<FountainKind>(['breakout', 'reject', 'milestone'
 // fast masher can't flood one lane with duplicate text.
 const KIND_COOLDOWN_MS: Partial<Record<FountainKind, number>> = {
   crit: 750,
-  chain: 900,
   gain: 900,
   breakout: 250,
   reject: 250,
@@ -64,7 +66,6 @@ const LANE_BY_KIND: Partial<Record<FountainKind, 'top' | 'mid' | 'bottom'>> = {
   breakout: 'top',
   milestone: 'top',
   overdrive: 'top',
-  chain: 'mid',
   supercharge: 'mid',
   crit: 'mid',
   gain: 'mid',

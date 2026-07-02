@@ -102,6 +102,14 @@ export function FakeChart({
   const rejected = phase === 'rejected' || phase === 'overheated'
   const approaching = phase === 'approaching'
 
+  // v0.4D: a persistent combo badge replaces the old floating "CHAIN ×N" fountain
+  // text — it lives in the header row (above the SVG, never over the resistance
+  // line) and just updates in place as the breakout streak climbs, with flame
+  // styling kicking in at higher tiers instead of another burst of text.
+  const breakoutStreak = resistance.breakoutStreak
+  const comboTier = overdrive ? 'overdrive' : breakoutStreak >= 5 ? 'tier-4' : breakoutStreak === 4 ? 'tier-3' : breakoutStreak === 3 ? 'tier-2' : 'tier-1'
+  const comboBadgeText = overdrive ? 'OVERDRIVE' : breakoutStreak >= 2 ? `×${breakoutStreak}` : null
+
   // Short action words — the player-facing teaching cue. Numbers live in dev stats.
   const cue = broken
     ? brokenPerfect
@@ -151,6 +159,7 @@ export function FakeChart({
       {overdrive ? <span className="chart-overdrive-flag">OVERDRIVE — GRAVITY HAS LEFT THE CHAT</span> : null}
       <div className="chart-header">
         <span className={`resistance-cue resistance-${phase}`}>{cue}</span>
+        {comboBadgeText ? <span className={`combo-badge ${comboTier}`}>{comboBadgeText}</span> : null}
         <strong className={isUp ? 'chart-up' : 'chart-down'}>{smash ? 'SMASH' : isUp ? 'UP ONLY' : 'DUMPING'}</strong>
       </div>
       <svg className="fake-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Fictional candlestick chart">
