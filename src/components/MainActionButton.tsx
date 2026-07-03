@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   getResistanceFocusMs,
+  getResistanceWallPrice,
   isResistanceFocusReady,
   RESISTANCE_FOCUS_BAND,
   RESISTANCE_FOCUS_START_MS,
@@ -211,7 +212,8 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   const focusMs = launched && !graduateReady && !overdrive ? getResistanceFocusMs(state.resistance, nowMs) : 0
   const focusReady = launched && !graduateReady && !overdrive && isResistanceFocusReady(state.resistance, nowMs)
   const focusBuilding = focusMs >= RESISTANCE_FOCUS_START_MS && !focusReady
-  const focusNear = phase === 'approaching' && state.resistance.price - state.chart.price <= RESISTANCE_FOCUS_BAND
+  const focusNear =
+    phase === 'approaching' && getResistanceWallPrice(state.resistance, nowMs, overdrive) - state.chart.price <= RESISTANCE_FOCUS_BAND
 
   let label: string
   let detail: string

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   classifyTapRating,
+  getResistanceCrackLane,
   getResistanceCrackPrice,
   getResistanceFocusMs,
-  getResistanceSweepPos,
+  getResistanceWallLane,
+  getResistanceWallPrice,
   isResistanceFocusReady,
   OVERHEAT,
 } from '../game/chart'
@@ -50,7 +52,7 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
   const floor = getTierFloor(state.bondingCurveTier)
   const remaining = Math.max(0, 100 - state.bondingCurveProgress)
   const now = Date.now()
-  const resistanceDistance = state.resistance.price - state.chart.price
+  const resistanceDistance = getResistanceWallPrice(state.resistance, now) - state.chart.price
   const windowMs = Math.max(0, state.resistance.windowUntil - now)
   const tapPreview = classifyTapRating(state.resistance, state.chart, now, state.chart.heat > OVERHEAT)
   const focusMs = getResistanceFocusMs(state.resistance, now)
@@ -120,10 +122,13 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
             phase: {state.resistance.phase} · last {state.resistance.lastRating ?? '—'} · preview {tapPreview}
           </div>
           <div>
-            pips {state.resistance.crackPips} · crack phase {state.resistance.crackTargetPos.toFixed(2)} @
+            pips {state.resistance.crackPips} · crack pos {state.resistance.crackPos.toFixed(2)} @
             {getResistanceCrackPrice(state.resistance, now).toFixed(1)}
           </div>
-          <div>sweep: {getResistanceSweepPos(state.resistance, now).toFixed(2)}</div>
+          <div>
+            wall lane {getResistanceWallLane(state.resistance, now).toFixed(1)} · crack lane{' '}
+            {getResistanceCrackLane(state.resistance, now).toFixed(1)}
+          </div>
           <div>
             focus {Math.round(focusMs)}ms {focusReady ? 'READY' : ''}
           </div>

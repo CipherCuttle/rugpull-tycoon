@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   getResistanceCrackBand,
+  getResistanceCrackLane,
   getResistanceCrackPrice,
-  getResistanceCurvePriceAtPos,
+  getResistanceLaneBand,
+  getResistanceWallLane,
+  getResistanceWallPrice,
   isResistanceCrackAligned,
   OVERHEAT,
+  RESISTANCE_LANE_HEAD,
   RESISTANCE_MAX_CRACK_PIPS,
+  RESISTANCE_WALL_LANE_SPAN,
   type Candle,
   type ChartState,
 } from '../game/chart'
@@ -52,7 +57,6 @@ export function FakeChart({
   milestoneLabel,
   tapEffect,
   resistance,
-  bonusTarget,
   isDecaying,
   supercharged,
   overdrive,
@@ -167,35 +171,39 @@ export function FakeChart({
   const currentCx = (visible.length - 1) * slot + slot / 2
   const currentCy = priceToY(chart.price)
   const segmentX = WIDTH * 0.56
-  // v0.4F.2: the wall's right edge is pinned to the candle head's own x, not an
-  // arbitrary panel margin — the strike lane. The head is the game's only
-  // hitbox and the crack socket (drawn at this same lane below) is the wall's
-  // only target, so wall, socket, and head all agree on where "here" is.
-  const segmentEndX = currentCx
-  const segmentWidth = Math.max(1, segmentEndX - segmentX)
+  // v0.4G: the wall moves on an abstract 0..100 "lane" scale (chart.ts), with
+  // 100 (RESISTANCE_LANE_HEAD) pinned to the candle head's own fixed x — the
+  // strike lane. laneToX maps that scale onto the same pixel span the old
+  // fixed wall segment used to occupy, so the wall (and its crack) slide
+  // through exactly the region the player already reads as "the lane".
+  const laneToX = (lane: number) => segmentX + (lane / RESISTANCE_LANE_HEAD) * (currentCx - segmentX)
   const now = Date.now()
-  // The wall sweeps: sample its price across the whole visible span so the
-  // drawn curve genuinely bows as the weak point travels, then read off the
-  // one sample that matters (the strike lane) for the crack socket itself.
-  const CURVE_SAMPLES = 20
-  const curveSamples = Array.from({ length: CURVE_SAMPLES + 1 }, (_, index) => {
-    const u = index / CURVE_SAMPLES
-    const x = segmentX + segmentWidth * u
-    const y = priceToY(getResistanceCurvePriceAtPos(resistance, u, now, overdrive))
-    return `${x.toFixed(1)},${y.toFixed(1)}`
-  })
-  const resistancePath = `M ${curveSamples.join(' ')}`
-  const crackX = segmentEndX
+  // The wall is a single straight bar — one center lane position, one live
+  // height. No per-position curve/bow; it just slides as a rigid whole.
+  const wallLane = getResistanceWallLane(resistance, now, overdrive)
+  const wallPrice = getResistanceWallPrice(resistance, now, overdrive)
+  const wallCenterX = laneToX(wallLane)
+  const wallY = priceToY(wallPrice)
+  const wallHalfWidthPx = Math.abs(laneToX(RESISTANCE_WALL_LANE_SPAN / 2) - laneToX(0)) / 2
+  const wallX1 = Math.max(4, wallCenterX - wallHalfWidthPx)
+  const wallX2 = Math.min(WIDTH - 4, wallCenterX + wallHalfWidthPx)
+  // The crack socket rides along the wall's own length (crackPos) — it's the
+  // only weak-point marker, and it travels wherever the wall's motion takes it.
+  const crackLane = getResistanceCrackLane(resistance, now, overdrive)
+  const crackX = Math.max(4, Math.min(WIDTH - 4, laneToX(crackLane)))
   const crackPrice = getResistanceCrackPrice(resistance, now, overdrive)
   const crackY = priceToY(crackPrice)
-  const crackBandPx = Math.max(7, (getResistanceCrackBand(overdrive) / (DISPLAY_MAX - DISPLAY_MIN)) * HEIGHT)
-  // v0.4F.2: "hot" now means the head is actually within striking distance of
-  // the socket — the same vertical check the reducer uses to score a hit, not
-  // a second marker's position lining up with the crack's.
+  const crackPriceBandPx = Math.max(6, (getResistanceCrackBand(overdrive) / (DISPLAY_MAX - DISPLAY_MIN)) * HEIGHT)
+  const crackLaneBandPx = Math.max(6, Math.abs(laneToX(RESISTANCE_LANE_HEAD - getResistanceLaneBand(overdrive)) - laneToX(RESISTANCE_LANE_HEAD)))
+  // v0.4G: "hot" means the head is actually within striking distance of the
+  // socket on BOTH axes — the same 2D check the reducer uses to score a hit,
+  // not a second marker's position lining up with the crack's.
   const crackReady = isResistanceCrackAligned(resistance, chart, now, overdrive)
-  const bonusVisible = bonusTarget && Date.now() < bonusTarget.expiresAt
-  const bonusX = bonusVisible ? Math.max(24, Math.min(WIDTH - 24, bonusTarget.xPos * WIDTH)) : 0
-  const bonusY = bonusVisible ? priceToY(bonusTarget.price) : 0
+  // v0.4G: the bonus-pickup scaffolding clutters the new moving wall — parked
+  // (rendering only) until it gets its own pass.
+  const bonusVisible = false
+  const bonusX = 0
+  const bonusY = 0
 
   return (
     <section
@@ -234,17 +242,20 @@ export function FakeChart({
             <rect
               className="chart-smash-window"
               x={Math.min(WIDTH - (overdrive ? 54 : 40), Math.max(segmentX - 6, crackX - (overdrive ? 25 : 18)))}
-              y={Math.max(0, crackY - crackBandPx - 3)}
+              y={Math.max(0, crackY - crackPriceBandPx - 3)}
               width={overdrive ? 50 : 36}
-              height={crackBandPx * 2 + 6}
+              height={crackPriceBandPx * 2 + 6}
               rx={4}
             />
           ) : null}
-          <path className="chart-resistance-line halo" d={resistancePath} />
-          <path className="chart-resistance-line core" d={resistancePath} />
-          {/* v0.4F.2: the wall's own bow (above) already shows the weak point
-              traveling — there is exactly one target marker, the socket below,
-              always at the strike lane where the candle head lives. */}
+          {/* v0.4G: the wall is a single straight bar — it never bows or
+              curves. It slides as a rigid whole; only its lane (x) and live
+              height (y) change tick to tick. */}
+          <line className="chart-resistance-line halo" x1={wallX1} y1={wallY} x2={wallX2} y2={wallY} />
+          <line className="chart-resistance-line core" x1={wallX1} y1={wallY} x2={wallX2} y2={wallY} />
+          {/* The wall's own slide (above) already shows it moving — there is
+              exactly one target marker, the socket below, which rides along
+              the wall at its fixed crackPos and so travels with it. */}
           {!shattered && !rejected ? (
             <g
               className={`chart-crack-target ${smash ? 'ready' : ''} ${overdrive ? 'overdrive' : ''} ${crackReady ? 'hot' : ''}`}
@@ -255,8 +266,8 @@ export function FakeChart({
                   replace its translate(crackX crackY) outright and teleport the
                   socket to the SVG origin. */}
               <g className="chart-crack-pulse">
-                <circle className="chart-crack-ping" r={crackBandPx} />
-                <circle className="chart-crack-band" r={crackBandPx * 0.6} />
+                <ellipse className="chart-crack-ping" rx={crackLaneBandPx} ry={crackPriceBandPx} />
+                <ellipse className="chart-crack-band" rx={crackLaneBandPx * 0.6} ry={crackPriceBandPx * 0.6} />
                 <circle className="chart-crack-core" r={4.4} />
               </g>
             </g>

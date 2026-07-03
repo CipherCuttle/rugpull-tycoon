@@ -63,14 +63,10 @@ function migrateGameState(value: GameState): GameState {
           typeof raw.resistance.crackPips === 'number'
             ? Math.max(0, Math.min(RESISTANCE_MAX_CRACK_PIPS, raw.resistance.crackPips))
             : RESISTANCE_MAX_CRACK_PIPS,
-        crackTargetPos:
-          typeof raw.resistance.crackTargetPos === 'number'
-            ? Math.max(0.12, Math.min(0.88, raw.resistance.crackTargetPos))
-            : freshResistance.crackTargetPos,
-        crackTargetPriceOffset:
-          typeof raw.resistance.crackTargetPriceOffset === 'number'
-            ? Math.max(-8, Math.min(8, raw.resistance.crackTargetPriceOffset))
-            : freshResistance.crackTargetPriceOffset,
+        crackPos:
+          typeof raw.resistance.crackPos === 'number'
+            ? Math.max(0.12, Math.min(0.88, raw.resistance.crackPos))
+            : freshResistance.crackPos,
         crackTargetSeq: raw.resistance.crackTargetSeq ?? freshResistance.crackTargetSeq,
         crackHitStreak: raw.resistance.crackHitStreak ?? raw.resistance.breakoutStreak ?? 0,
         focusStartedAt: 0,

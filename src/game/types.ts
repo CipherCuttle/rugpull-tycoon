@@ -114,13 +114,12 @@ export interface ResistanceState {
   // v0.4E: target-local wall health. Fresh targets start at 3; clean hits crack
   // this target only, and a full shatter respawns the next target with fresh pips.
   crackPips: number
-  // v0.4F.2: active weak spot. crackTargetPos seeds the traveling bump's sweep
-  // phase (see getResistanceSweepPos) and crackTargetPriceOffset is the bump's
-  // depth — how far the wall's price dips at the strike lane when the bump is
-  // centered there. Neither is a screen position; the crack socket is always
-  // drawn at the strike lane (the candle head's fixed x).
-  crackTargetPos: number
-  crackTargetPriceOffset: number
+  // v0.4G: the crack's fixed position along the wall's own straight length
+  // (0 = back edge, 1 = front edge). The wall itself moves (see
+  // getResistanceWallLane / getResistanceWallPrice in chart.ts); the crack
+  // just rides along for the trip, so it visibly travels with the wall
+  // instead of always sitting in the same spot.
+  crackPos: number
   crackTargetSeq: number
   crackHitStreak: number
   // ms epoch used by the patience/focus beat. It is never restored from saves.

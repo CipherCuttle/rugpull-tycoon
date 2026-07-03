@@ -75,6 +75,7 @@ import {
   createInitialChart,
   createInitialResistance,
   getResistanceCrackAlignmentDistance,
+  getResistanceLaneDistance,
   isResistanceCrackAligned,
   isResistanceFocusReady,
   resolveBreakoutTap,
@@ -83,6 +84,7 @@ import {
   OVERHEAT,
   RESISTANCE_BROKEN_HOLD_MS,
   RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE,
+  RESISTANCE_LANE_ALIGN_BAND_OVERDRIVE,
   RESISTANCE_MAX_CRACK_PIPS,
   RESISTANCE_MISSED_HOLD_MS,
   RESISTANCE_OVERHEAT_HOLD_MS,
@@ -589,6 +591,11 @@ const BONUS_TARGET_LIFETIME_MS = 2100
 const BONUS_TARGET_BAND = 6
 const BONUS_TARGET_BAND_OVERDRIVE = 8.5
 
+// v0.4G: compact degen miss/shatter labels — one picked per event, never all
+// of them at once, so the same beat doesn't read as sterile every single time.
+const MISS_LABELS = ['MISSED CRACK', 'JEET SLAP', 'JEETS ATE IT', 'ROOM GOT SUSPICIOUS', 'STOP MASHING']
+const SHATTER_LABELS = ['SHATTERED', 'WALL GOT LIQUIDATED', 'ROOM LOST CONTROL']
+
 type BreakoutReward = {
   chain: number
   crackStreak?: number
@@ -688,7 +695,7 @@ function resolveResistanceTap(
   timingLabel: string | null
 } {
   const overheated = state.chart.heat > OVERHEAT && !isOverdrive
-  const outcome = resolveBreakoutTap(state.resistance, state.chart, now, overheated)
+  const outcome = resolveBreakoutTap(state.resistance, state.chart, now, overheated, isOverdrive)
   const rapidTap = !isOverdrive && tapGapMs <= PANIC_TAP_GAP_MS
 
   if (rapidTap && (outcome === 'breakout-perfect' || outcome === 'breakout-good')) {
@@ -707,7 +714,8 @@ function resolveResistanceTap(
       !isOverdrive &&
       wasFocusReady &&
       smashActive &&
-      getResistanceCrackAlignmentDistance(state.resistance, state.chart, now) <= RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE
+      getResistanceCrackAlignmentDistance(state.resistance, state.chart, now) <= RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE &&
+      getResistanceLaneDistance(state.resistance, now) <= RESISTANCE_LANE_ALIGN_BAND_OVERDRIVE
     const crackAligned = isResistanceCrackAligned(state.resistance, state.chart, now, isOverdrive) || focusAligned
 
     if (!crackAligned || !smashActive) {
@@ -742,12 +750,13 @@ function resolveResistanceTap(
       )
       next = awardLiquidity(next, 0, bonusCurve)
 
+      const missLabel = pickLine(MISS_LABELS, now)
       return {
         next,
         rating: 'weak',
         breakoutReward: null,
-        superchargeNote: { text: 'MISSED CRACK - WALL SEALED', kind: 'blocked' },
-        timingLabel: 'MISSED CRACK',
+        superchargeNote: { text: missLabel, kind: 'blocked' },
+        timingLabel: missLabel,
       }
     }
 
@@ -816,8 +825,9 @@ function resolveResistanceTap(
     // pure duplication for the common case, and the chain streak now lives in the
     // persistent combo badge instead of a floating line. Only PERFECT still gets
     // its own fountain beat — it's rarer and earns the extra fanfare.
+    const shatterLabel = shattered ? pickLine(SHATTER_LABELS, now) : null
     if (shattered) {
-      next = pushFountain(next, 'SHATTERED', 'shatter')
+      next = pushFountain(next, shatterLabel ?? 'SHATTERED', 'shatter')
       next = spawnBonusTarget(next, now)
     } else if (focusPerfect) {
       next = pushFountain(next, 'PERFECT CRACK', 'breakout')
@@ -829,7 +839,7 @@ function resolveResistanceTap(
       rating: perfect ? 'perfect' : 'good',
       breakoutReward: { chain: streak, crackStreak: streak, superchargeGain, curvePercent, shattered, focusPerfect },
       superchargeNote: null,
-      timingLabel: shattered ? 'SHATTERED' : perfect ? 'PERFECT CRACK' : crackPips === 1 ? 'ONE MORE' : 'CRACK HIT',
+      timingLabel: shatterLabel ?? (perfect ? 'PERFECT CRACK' : crackPips === 1 ? 'ONE MORE' : 'CRACK HIT'),
     }
   }
 
@@ -970,7 +980,7 @@ function sendCandle(state: GameState, now: number): GameState {
   // tap's own effect. Overdrive still gets heat immunity, but it no longer
   // deletes timing/crack targeting.
   const preTapOverheated = state.chart.heat > OVERHEAT && !isOverdrive
-  const tapRating = classifyTapRating(state.resistance, state.chart, now, preTapOverheated)
+  const tapRating = classifyTapRating(state.resistance, state.chart, now, preTapOverheated, isOverdrive)
   const wasFocusReady = isResistanceFocusReady(state.resistance, now)
   const wasSmash = state.resistance.phase === 'smash'
   const rewardScale = getTapRatingRewardScale(tapRating)

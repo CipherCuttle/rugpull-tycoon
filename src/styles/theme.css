@@ -1601,44 +1601,41 @@ h2 {
   text-shadow: 0 0 14px rgba(255, 194, 58, 0.7);
 }
 
-/* --- v0.3.4 Candlestick chart / v0.4 Resistance Breakout target --- */
+/* --- v0.3.4 Candlestick chart / v0.4G Straight Sell Wall target --- */
 .chart-resistance-target {
   pointer-events: none;
 }
 
-/* v0.4F.2: the wall's own bow is the sweep — smooth the sampled-path redraws
-   between ticks instead of letting it snap. Where "d" interpolation isn't
-   supported it just steps at tick cadence, which already reads fine. */
+/* v0.4G: the wall is a single rigid straight bar — no bow, no curve, no
+   dashing (that read as a guideline/snake, not a wall). It just slides; smooth
+   the x/y attribute changes between ticks instead of letting them snap. */
 .chart-resistance-line {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
-  transition: d 140ms linear;
+  transition: x1 140ms linear, x2 140ms linear, y1 140ms linear, y2 140ms linear;
 }
 
 .chart-resistance-line.halo {
   stroke: rgba(255, 194, 58, 0.28);
-  stroke-width: 10;
+  stroke-width: 11;
   filter: drop-shadow(0 0 9px rgba(255, 194, 58, 0.65));
 }
 
 .chart-resistance-line.core {
   stroke: var(--amber);
-  stroke-width: 2.5;
-  stroke-dasharray: 7 5;
+  stroke-width: 5;
 }
 
 /* v0.4A phase-driven line states. Approaching brightens the line so the player
    knows a smash is coming; smash makes it flash (handled by .chart-smash-window);
    broken shatters/fades it; rejected/overheated turns it red. */
 .chart-resistance-target.resistance-approaching .chart-resistance-line.core {
-  stroke-dasharray: 4 3;
   animation: resistance-line-pulse 700ms ease-in-out infinite;
 }
 
 .chart-resistance-target.resistance-smash .chart-resistance-line.core {
   stroke: #fff;
-  stroke-dasharray: none;
   filter: drop-shadow(0 0 8px rgba(255, 194, 58, 0.95));
 }
 
@@ -1649,7 +1646,6 @@ h2 {
 
 .chart-resistance-target.resistance-missed .chart-resistance-line.core {
   stroke: var(--red-2);
-  stroke-dasharray: 3 5;
   filter: drop-shadow(0 0 8px rgba(255, 59, 82, 0.7));
 }
 
@@ -1659,7 +1655,6 @@ h2 {
 
 .chart-resistance-target.resistance-shattered .chart-resistance-line.core {
   stroke: #fff;
-  stroke-dasharray: 2 5;
   filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 18px rgba(255, 194, 58, 0.75));
 }
 
