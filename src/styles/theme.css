@@ -1617,16 +1617,18 @@ h2 {
 }
 
 .chart-resistance-line.halo {
-  stroke: rgba(255, 194, 58, 0.28);
-  stroke-width: 17;
-  filter: drop-shadow(0 0 9px rgba(255, 194, 58, 0.65));
+  stroke: rgba(255, 194, 58, 0.3);
+  stroke-width: 23;
+  filter: drop-shadow(0 0 12px rgba(255, 194, 58, 0.7));
 }
 
-/* v0.4H: thicker/chunkier — the wall should read as a proper sell wall, not a
-   thin trip-line. */
+/* v0.4H/v0.4I: thicker/chunkier — the wall should read as a proper sell wall,
+   not a thin trip-line. v0.4I bumped again (10 -> 15) alongside the wider lane
+   span (chart.ts RESISTANCE_WALL_LANE_SPAN) — "wall still feels a bit too
+   small" was the loudest readability note left after v0.4H. */
 .chart-resistance-line.core {
   stroke: var(--amber);
-  stroke-width: 10;
+  stroke-width: 15;
 }
 
 /* v0.4A phase-driven line states. Approaching brightens the line so the player
@@ -1693,6 +1695,29 @@ h2 {
   animation: resistance-burst-shatter 900ms ease-out forwards;
 }
 
+/* v0.4I: the wall itself should visibly take damage, not just report a pip
+   count in the header. Each spent pip punches a dark "bite" mark straight out
+   of the bar, sitting on top of the halo/core lines. */
+.chart-wall-chunk-damage {
+  fill: rgba(8, 5, 5, 0.86);
+  stroke: rgba(255, 59, 82, 0.55);
+  stroke-width: 1;
+  filter: drop-shadow(0 0 4px rgba(255, 59, 82, 0.35));
+}
+
+/* On shatter every chunk (not just the already-damaged ones) flies apart and
+   fades — a clearly different, one-shot beat from an ordinary crack hit's
+   static bite mark. Staggered per-chunk via inline animation-delay in
+   FakeChart.tsx so the wall reads as breaking apart left-to-right. */
+.chart-wall-chunk-shatter {
+  fill: rgba(255, 255, 255, 0.92);
+  stroke: var(--amber);
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: wall-chunk-disintegrate 560ms ease-out forwards;
+}
+
 .chart-crack-target {
   filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.72)) drop-shadow(0 0 12px rgba(255, 194, 58, 0.5));
   /* v0.4F.2: this group's position comes from the translate(crackX crackY)
@@ -1708,11 +1733,18 @@ h2 {
   transform-origin: center;
 }
 
+/* v0.4I: one ring, sized to the ACTUAL hit radius (rx/ry come straight from
+   getResistanceLaneBand/getResistanceCrackBand in FakeChart.tsx, unscaled —
+   previously this ring was drawn at 0.6x next to a separate full-size "ping"
+   ellipse, so the visible target didn't match the real hitbox). A slow,
+   subtle breathe when idle; brighter/thicker and pulsing much faster the
+   moment SMASH opens (below) — no more slow sonar wave that read as an
+   ambiguous second target. */
 .chart-crack-band {
-  fill: rgba(255, 194, 58, 0.13);
-  stroke: rgba(255, 255, 255, 0.35);
-  stroke-width: 1;
-  stroke-dasharray: 2 3;
+  fill: rgba(255, 194, 58, 0.1);
+  stroke: rgba(255, 255, 255, 0.45);
+  stroke-width: 1.8;
+  animation: crack-ring-breathe 1100ms ease-in-out infinite;
 }
 
 .chart-crack-core {
@@ -1721,37 +1753,29 @@ h2 {
   stroke-width: 1.4;
 }
 
-/* v0.4F: the weak-point marker is a ping/ripple, not a debug X. A slow ambient
-   ripple invites the eye; it quickens once the smash window is live so the
-   player reads "this is about to matter." */
-.chart-crack-ping {
-  fill: none;
-  stroke: rgba(255, 247, 184, 0.5);
-  stroke-width: 1.3;
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: crack-ping 1500ms ease-out infinite;
-}
-
-.chart-crack-target.ready .chart-crack-ping {
-  animation-duration: 480ms;
-  stroke: rgba(255, 255, 255, 0.75);
-}
-
-.chart-crack-target.hot .chart-crack-ping {
-  stroke: rgba(255, 255, 255, 0.85);
-  stroke-width: 1.7;
-}
-
 .chart-crack-target.ready .chart-crack-pulse {
-  animation: crack-target-pulse 320ms ease-in-out infinite;
+  animation: crack-target-pulse 220ms ease-in-out infinite;
 }
 
-.chart-crack-target.ready .chart-crack-band,
-.chart-crack-target.overdrive .chart-crack-band,
+.chart-crack-target.ready .chart-crack-band {
+  fill: rgba(255, 255, 255, 0.22);
+  stroke: #fff;
+  stroke-width: 3;
+  animation: none;
+}
+
 .chart-crack-target.hot .chart-crack-band {
-  fill: rgba(255, 255, 255, 0.17);
-  stroke: rgba(255, 255, 255, 0.72);
+  stroke: #fff;
+  stroke-width: 3.4;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.75));
+}
+
+/* Overdrive: the ring is already geometrically wider (real band values, see
+   above) — recolor it acid-green so the widened hitbox also reads as "a
+   different mode", not just "a bigger version of the same thing". */
+.chart-crack-target.overdrive .chart-crack-band {
+  stroke: var(--acid-2);
+  fill: rgba(70, 255, 155, 0.16);
 }
 
 .chart-crack-target.overdrive .chart-crack-core {
@@ -1855,6 +1879,23 @@ h2 {
   animation: head-flap 180ms ease-out;
 }
 
+/* v0.4I: a real crack hit (broken/shattered) gets a bigger, punchier squash
+   than an ordinary tap's pop -- "bullet time is not noticeable" included the
+   head's own impact read. */
+.chart-active-tip-flap.impact {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: head-impact 260ms ease-out;
+}
+
+/* v0.4I: a miss recoils/drops instead of popping up -- the physical "wrong
+   part of the wall" read the miss-tactility pass asked for. */
+.chart-active-tip-flap.recoil {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: head-recoil 240ms ease-out;
+}
+
 .chart-tap-spark {
   fill: rgba(255, 247, 184, 0.9);
   filter: drop-shadow(0 0 6px rgba(255, 194, 58, 0.85));
@@ -1863,12 +1904,20 @@ h2 {
   animation: tap-spark-burst 220ms ease-out forwards;
 }
 
-/* v0.4H Bullet Time: a brief Max Payne-style confirmation pulse right after a
-   crack hit — the panel's own light flexes, plus an expanding ring overlay,
-   then it's gone. Layered on top of the existing breakout/shatter flashes,
-   never replacing them. */
+.chart-tap-spark.miss {
+  fill: rgba(255, 110, 110, 0.9);
+  filter: drop-shadow(0 0 6px rgba(255, 59, 82, 0.85));
+}
+
+/* v0.4H/v0.4I Bullet Time: a brief Max Payne-style confirmation pulse right
+   after a crack hit — the panel's own light flexes, plus an expanding ring
+   overlay, then it's gone. Layered on top of the existing breakout/shatter
+   flashes, never replacing them. v0.4I: louder (higher brightness/saturate
+   peak, thicker ring) and stretched to 380ms to fill the lengthened
+   BULLET_TIME_GOOD_MS window (chart.ts) — "bullet time is not noticeable" was
+   a loud playtest note. */
 .hero-chart.bullet-time {
-  animation: bullet-time-flex 320ms ease-out;
+  animation: bullet-time-flex 380ms ease-out;
 }
 
 .hero-chart.bullet-time::before {
@@ -1878,8 +1927,8 @@ h2 {
   z-index: 1;
   pointer-events: none;
   border-radius: inherit;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
-  animation: bullet-time-ring 320ms ease-out forwards;
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.7);
+  animation: bullet-time-ring 380ms ease-out forwards;
 }
 
 .hero-chart.smash-window {
@@ -1906,13 +1955,28 @@ h2 {
   box-shadow: var(--shadow), 0 0 40px rgba(255, 194, 58, 0.36), inset 0 0 28px rgba(70, 255, 155, 0.12);
 }
 
+/* v0.4I: a miss should feel like hitting the wrong part of the wall -- a red
+   slap flash across the whole panel plus a vertical jolt (on top of the
+   existing horizontal reject-shake on the SVG below), not just a border tint. */
 .hero-chart.missed-crack {
   border-color: rgba(255, 107, 82, 0.8);
   box-shadow: var(--shadow), 0 0 28px rgba(255, 59, 82, 0.26), inset 0 0 18px rgba(255, 59, 82, 0.08);
+  animation: chart-jolt 220ms ease-out;
+}
+
+.hero-chart.missed-crack::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  background: radial-gradient(circle, rgba(255, 59, 82, 0.4), transparent 70%);
+  animation: miss-slap-flash 240ms ease-out forwards;
 }
 
 .hero-chart.missed-crack .fake-chart {
-  animation: reject-shake 220ms ease-out;
+  animation: reject-shake 260ms ease-out;
 }
 
 .hero-chart.shattered {
@@ -2278,6 +2342,19 @@ h2 {
 .hero-chart.overdrive {
   border-color: rgba(255, 255, 255, 0.8);
   animation: overdrive-chart-pulse 420ms ease-in-out infinite;
+}
+
+/* v0.4I: Overdrive "kicks in without being noticeable" was a loud playtest
+   note -- a big one-shot transition pulse on the way in (source-order wins
+   over the continuous .overdrive pulse above for its short duration, then the
+   class is removed and the ambient pulse resumes) and a clear power-down fade
+   on the way out. */
+.hero-chart.overdrive-enter {
+  animation: overdrive-enter-burst 640ms ease-out;
+}
+
+.hero-chart.overdrive-exit {
+  animation: overdrive-exit-fade 480ms ease-out;
 }
 
 .chart-overdrive-flag {
@@ -2780,18 +2857,31 @@ h2 {
     transform: scale(1);
   }
   50% {
-    transform: scale(1.18);
+    transform: scale(1.14);
   }
 }
 
-@keyframes crack-ping {
+/* v0.4I: replaces the old expanding/fading crack-ping sonar wave — a calm
+   opacity breathe instead of a shape that visually implies a second, growing
+   target. */
+@keyframes crack-ring-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes wall-chunk-disintegrate {
   0% {
-    transform: scale(0.5);
-    opacity: 0.85;
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
   }
   100% {
-    transform: scale(1.7);
     opacity: 0;
+    transform: translateY(-16px) scale(0.4) rotate(22deg);
   }
 }
 
@@ -2813,13 +2903,40 @@ h2 {
     transform: translateX(0);
   }
   20% {
-    transform: translateX(-4px);
+    transform: translateX(-6px);
   }
   50% {
-    transform: translateX(3px);
+    transform: translateX(4px);
   }
   80% {
-    transform: translateX(-2px);
+    transform: translateX(-3px);
+  }
+}
+
+/* v0.4I: a small vertical jolt on the whole panel, layered with the
+   horizontal reject-shake on the SVG (above) so a miss reads as a "the whole
+   machine got slapped" beat, not just a line wiggling. */
+@keyframes chart-jolt {
+  0% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(4px);
+  }
+  60% {
+    transform: translateY(-2px);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+@keyframes miss-slap-flash {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
   }
 }
 
@@ -2850,6 +2967,42 @@ h2 {
   }
 }
 
+/* v0.4I: a real crack hit's exaggerated squash-overshoot-settle, louder than
+   the ordinary tap-pop above. */
+@keyframes head-impact {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.6, 0.55);
+  }
+  55% {
+    transform: scale(0.75, 1.35);
+  }
+  80% {
+    transform: scale(1.1, 0.92);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* v0.4I: a miss ducks and drops instead of popping up. */
+@keyframes head-recoil {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  30% {
+    transform: scale(0.7, 1.3) translateY(3px);
+  }
+  60% {
+    transform: scale(1.15, 0.85) translateY(-1px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+  }
+}
+
 @keyframes tap-spark-burst {
   0% {
     opacity: 1;
@@ -2863,7 +3016,10 @@ h2 {
 
 @keyframes bullet-time-flex {
   0% {
-    filter: brightness(1.5) saturate(1.3);
+    filter: brightness(1.7) saturate(1.5);
+  }
+  20% {
+    filter: brightness(1.7) saturate(1.5);
   }
   100% {
     filter: brightness(1) saturate(1);
@@ -2872,12 +3028,12 @@ h2 {
 
 @keyframes bullet-time-ring {
   0% {
-    opacity: 0.9;
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7), inset 0 0 26px rgba(255, 255, 255, 0.3);
+    opacity: 0.95;
+    box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0.8), inset 0 0 34px rgba(255, 255, 255, 0.4);
   }
   100% {
     opacity: 0;
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0), inset 0 0 0 rgba(255, 255, 255, 0);
+    box-shadow: inset 0 0 0 3px rgba(255, 255, 255, 0), inset 0 0 0 rgba(255, 255, 255, 0);
   }
 }
 
@@ -3117,6 +3273,30 @@ h2 {
   }
 }
 
+@keyframes overdrive-enter-burst {
+  0% {
+    transform: scale(1);
+    filter: brightness(1) saturate(1);
+  }
+  25% {
+    transform: scale(1.05);
+    filter: brightness(1.9) saturate(1.6);
+  }
+  100% {
+    transform: scale(1);
+    filter: brightness(1) saturate(1);
+  }
+}
+
+@keyframes overdrive-exit-fade {
+  0% {
+    filter: brightness(1.4) saturate(1.3);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+  }
+}
+
 @keyframes prestige-slam {
   0% {
     opacity: 0;
@@ -3146,11 +3326,15 @@ h2 {
   .chart-overheat-flag,
   .chart-active-tip.ready circle:first-child,
   .chart-active-tip-flap.pop,
+  .chart-active-tip-flap.impact,
+  .chart-active-tip-flap.recoil,
   .chart-tap-spark,
   .hero-chart.bullet-time,
   .hero-chart.bullet-time::before,
   .hero-chart.breakout-perfect .fake-chart,
   .hero-chart.breakout .fake-chart,
+  .hero-chart.missed-crack,
+  .hero-chart.missed-crack::before,
   .hero-chart.missed-crack .fake-chart,
   .hero-chart.shattered,
   .hero-chart.shattered .fake-chart,
@@ -3162,8 +3346,9 @@ h2 {
   .chart-resistance-target.resistance-shattered .chart-resistance-line,
   .chart-resistance-burst,
   .chart-resistance-burst.shatter,
+  .chart-wall-chunk-shatter,
+  .chart-crack-band,
   .chart-crack-target.ready .chart-crack-pulse,
-  .chart-crack-ping,
   .chart-bonus-target,
   .main-action.breakout-ready,
   .main-action.breakout-rejected,
@@ -3181,6 +3366,8 @@ h2 {
   .tap-float-breakout,
   .main-action.overdrive,
   .hero-chart.overdrive,
+  .hero-chart.overdrive-enter,
+  .hero-chart.overdrive-exit,
   .chart-overdrive-flag,
   .game-shell.overdrive-shell::before,
   .combo-badge.tier-3,

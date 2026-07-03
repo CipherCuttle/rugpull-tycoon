@@ -41,6 +41,10 @@ interface FakeChartProps {
 
 const TAP_FLASH_MS = 220
 const MILESTONE_PULSE_MS = 750
+// v0.4I: one-shot Overdrive enter/exit accents layered on top of the
+// continuous `.hero-chart.overdrive` aura -- see the useEffect below.
+const OVERDRIVE_ENTER_MS = 640
+const OVERDRIVE_EXIT_MS = 480
 
 const WIDTH = 360
 const HEIGHT = 184
@@ -70,8 +74,11 @@ export function FakeChart({
 
   const [tapFlash, setTapFlash] = useState(false)
   const [milestonePulse, setMilestonePulse] = useState(false)
+  const [overdriveEnter, setOverdriveEnter] = useState(false)
+  const [overdriveExit, setOverdriveExit] = useState(false)
   const lastTapId = useRef<number | null>(null)
   const lastTier = useRef(tier)
+  const lastOverdrive = useRef(overdrive)
 
   useEffect(() => {
     if (!tapEffect || tapEffect.id === lastTapId.current) {
@@ -97,6 +104,27 @@ export function FakeChart({
 
     return () => window.clearTimeout(timeout)
   }, [tier])
+
+  // v0.4I: Overdrive currently "kicks in without being noticeable" -- fire a big
+  // one-shot transition pulse the instant it starts, and a clear power-down fade
+  // the instant it ends, on top of the continuous aura (.hero-chart.overdrive).
+  useEffect(() => {
+    if (overdrive && !lastOverdrive.current) {
+      lastOverdrive.current = overdrive
+      setOverdriveEnter(true)
+      const timeout = window.setTimeout(() => setOverdriveEnter(false), OVERDRIVE_ENTER_MS)
+      return () => window.clearTimeout(timeout)
+    }
+
+    if (!overdrive && lastOverdrive.current) {
+      lastOverdrive.current = overdrive
+      setOverdriveExit(true)
+      const timeout = window.setTimeout(() => setOverdriveExit(false), OVERDRIVE_EXIT_MS)
+      return () => window.clearTimeout(timeout)
+    }
+
+    lastOverdrive.current = overdrive
+  }, [overdrive])
 
   // The in-progress candle rides along the completed history so the chart reacts
   // to the very latest tick/tap.
@@ -212,13 +240,25 @@ export function FakeChart({
   const bonusX = 0
   const bonusY = 0
 
+  // v0.4I: the wall should visibly get destroyed, not just report a pip count
+  // in the header. Split its rendered span into RESISTANCE_MAX_CRACK_PIPS equal
+  // chunks; each pip already spent (state.crackPips counts DOWN from
+  // RESISTANCE_MAX_CRACK_PIPS to 0) punches a dark "bite" mark straight out of
+  // the bar at that chunk's position. On shatter every chunk flies apart instead
+  // (see .chart-wall-chunk-shatter), so a normal crack hit and a full shatter
+  // read as visibly different beats.
+  const wallChunkWidthPx = Math.max(2, (wallX2 - wallX1) / RESISTANCE_MAX_CRACK_PIPS)
+  const wallChunkHeightPx = 20
+
   return (
     <section
       className={`chart-panel hero-chart surf-${zone.zone} ${tapFlash ? 'tap-flash' : ''} ${
         milestonePulse ? 'milestone-pulse' : ''
       } ${dumping ? 'dumping' : ''} ${unstable ? 'unstable' : ''} ${isDecaying ? 'decaying' : ''} ${
         overheated ? 'overheated' : ''
-      } ${supercharged ? 'supercharged' : ''} ${overdrive ? 'overdrive' : ''} ${smash ? 'smash-window' : ''} ${
+      } ${supercharged ? 'supercharged' : ''} ${overdrive ? 'overdrive' : ''} ${overdriveEnter ? 'overdrive-enter' : ''} ${
+        overdriveExit ? 'overdrive-exit' : ''
+      } ${smash ? 'smash-window' : ''} ${
         approaching ? 'resistance-close' : ''
       } ${broken ? 'breakout' : ''} ${missed ? 'missed-crack' : ''} ${shattered ? 'shattered' : ''} ${
         brokenPerfect ? 'breakout-perfect' : ''
@@ -254,9 +294,45 @@ export function FakeChart({
               height (y) change tick to tick. */}
           <line className="chart-resistance-line halo" x1={wallX1} y1={wallY} x2={wallX2} y2={wallY} />
           <line className="chart-resistance-line core" x1={wallX1} y1={wallY} x2={wallX2} y2={wallY} />
+          {/* v0.4I: visible wall damage. Below the shatter hold, remaining
+              chunks fly apart instead of showing bite marks -- one clearly
+              different beat from an ordinary crack hit. */}
+          {Array.from({ length: RESISTANCE_MAX_CRACK_PIPS }, (_, index) => {
+            const chunkX = wallX1 + index * wallChunkWidthPx
+            if (shattered) {
+              return (
+                <rect
+                  key={`wall-shatter-${resistance.id}-${index}`}
+                  className="chart-wall-chunk chart-wall-chunk-shatter"
+                  style={{ animationDelay: `${index * 45}ms` }}
+                  x={chunkX + 1}
+                  y={wallY - wallChunkHeightPx / 2}
+                  width={Math.max(1, wallChunkWidthPx - 2)}
+                  height={wallChunkHeightPx}
+                  rx={2}
+                />
+              )
+            }
+            if (index >= resistance.crackPips) {
+              return (
+                <rect
+                  key={`wall-damage-${index}`}
+                  className="chart-wall-chunk chart-wall-chunk-damage"
+                  x={chunkX + 1}
+                  y={wallY - wallChunkHeightPx / 2}
+                  width={Math.max(1, wallChunkWidthPx - 2)}
+                  height={wallChunkHeightPx}
+                  rx={2}
+                />
+              )
+            }
+            return null
+          })}
           {/* The wall's own slide (above) already shows it moving — there is
-              exactly one target marker, the socket below, which rides along
-              the wall at its fixed crackPos and so travels with it. */}
+              exactly one target marker below: a ring sized to the actual hit
+              radius plus a center glow. v0.4I: dropped the old slow sonar-ping
+              ellipse (ambiguous, read as a second target) so aiming reads off
+              one unambiguous ring. */}
           {!shattered && !rejected ? (
             <g
               className={`chart-crack-target ${smash ? 'ready' : ''} ${overdrive ? 'overdrive' : ''} ${crackReady ? 'hot' : ''}`}
@@ -267,8 +343,7 @@ export function FakeChart({
                   replace its translate(crackX crackY) outright and teleport the
                   socket to the SVG origin. */}
               <g className="chart-crack-pulse">
-                <ellipse className="chart-crack-ping" rx={crackLaneBandPx} ry={crackPriceBandPx} />
-                <ellipse className="chart-crack-band" rx={crackLaneBandPx * 0.6} ry={crackPriceBandPx * 0.6} />
+                <ellipse className="chart-crack-band" rx={crackLaneBandPx} ry={crackPriceBandPx} />
                 <circle className="chart-crack-core" r={4.4} />
               </g>
             </g>
@@ -316,14 +391,15 @@ export function FakeChart({
             <path className="chart-bonus-spark" d="M 0 -13 L 2 -4 L 10 -7 L 4 0 L 11 5 L 2 4 L 0 13 L -2 4 L -11 5 L -4 0 L -10 -7 L -2 -4 Z" />
           </g>
         ) : null}
-        {/* v0.4H: a one-shot spark burst on the candle head itself, keyed by
-            tapEffect.id so every tap remounts (and replays) it -- the tactile
-            "flap" pop the Flappy-feel pass asked for, on top of the squash
-            transform below. */}
+        {/* v0.4H/v0.4I: a one-shot spark burst on the candle head itself, keyed
+            by tapEffect.id so every tap remounts (and replays) it. A clean
+            crack hit gets the gold spark; a miss gets a smaller red one instead
+            -- the tactile "what just happened" read the miss-tactility pass
+            asked for. */}
         {tapFlash && tapEffect ? (
           <g key={`spark-${tapEffect.id}`} transform={`translate(${currentCx} ${currentCy})`} aria-hidden="true">
             <path
-              className="chart-tap-spark"
+              className={`chart-tap-spark ${missed ? 'miss' : ''}`}
               d="M 0 -9 L 1.6 -2.6 L 7 -5 L 2.6 -1 L 8 3 L 1.6 2.2 L 0 9 L -1.6 2.2 L -8 3 L -2.6 -1 L -7 -5 L -1.6 -2.6 Z"
             />
           </g>
@@ -336,8 +412,14 @@ export function FakeChart({
           {/* Squash-pop lives on an inner group with no position transform of its
               own -- same reason as .chart-crack-pulse: a CSS transform here
               would otherwise replace the outer translate(currentCx currentCy)
-              outright and teleport the head to the SVG origin. */}
-          <g className={`chart-active-tip-flap ${tapFlash ? 'pop' : ''}`}>
+              outright and teleport the head to the SVG origin. v0.4I: a real
+              crack hit (broken/shattered) gets a bigger "impact" squash than an
+              ordinary tap's pop, and a miss gets a downward recoil instead. */}
+          <g
+            className={`chart-active-tip-flap ${
+              tapFlash ? (missed ? 'recoil' : broken || shattered ? 'impact' : 'pop') : ''
+            }`}
+          >
             <circle r="5.8" />
             <circle r="2.5" />
           </g>

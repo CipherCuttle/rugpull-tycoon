@@ -110,6 +110,7 @@ function migrateGameState(value: GameState): GameState {
     // hundred ms at most and long past by the time a save loads, so it just
     // reads as inactive — no clamping needed, same as overdriveUntil above.
     bulletTimeUntil: raw.bulletTimeUntil ?? 0,
+    bulletFreezeUntil: raw.bulletFreezeUntil ?? 0,
     fountainEvents: [],
     fountainSeq: raw.fountainSeq ?? 0,
     // v0.3.4 Candlestick Physics: additive. Old saves (which stored surfPressure

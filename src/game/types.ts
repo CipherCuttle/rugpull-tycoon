@@ -270,6 +270,11 @@ export interface GameState {
   // reducer.ts applyChartGravity) -- passive income and Chart Gravity decay
   // always run on the real clock. 0 when no bullet time is active.
   bulletTimeUntil: number
+  // v0.4I: ms epoch until which the ambient chart/resistance advance is fully
+  // frozen (dt 0) -- the brief "impact freeze" frame that leads into the Bullet
+  // Time slow-mo above. Same real-clock exemption as bulletTimeUntil. 0 when
+  // inactive.
+  bulletFreezeUntil: number
   // v0.3.5: capped ring of floating-combat-text bursts (visual only). See
   // FountainEvent. `fountainSeq` is the monotonic id source.
   fountainEvents: FountainEvent[]

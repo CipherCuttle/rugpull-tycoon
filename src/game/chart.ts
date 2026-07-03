@@ -153,7 +153,11 @@ export const RESISTANCE_LANE_HEAD = 100
 // The wall's own length in lane units -- the crack rides somewhere inside this
 // span, centered on the wall's current lane position. v0.4H: widened (34 -> 54)
 // so it reads as a proper wide sell wall crossing the lane, not a thin bar.
-export const RESISTANCE_WALL_LANE_SPAN = 54
+// v0.4I: widened again (54 -> 66) plus a much chunkier stroke/glow (see
+// theme.css) -- "sell wall still feels a bit too small" was the loudest
+// readability note. Purely a render-size bump; the crack's hit bands are
+// unchanged, so this doesn't touch difficulty.
+export const RESISTANCE_WALL_LANE_SPAN = 66
 // Horizontal sweep: how long one full lane_min -> lane_head -> lane_min cycle
 // takes. Overdrive slows it so a wide-open crack lingers in reach longer
 // instead of just widening the hitbox around a fast-moving point. v0.4H:
@@ -192,9 +196,18 @@ function getEarlyLeniencyScale(id: number, factor: number): number {
 // crawl, then ramps back to normal. Scoped to chart/resistance ticks only (see
 // reducer.ts applyChartGravity) so passive income and Chart Gravity decay never
 // see the slowed clock -- this is a feel beat, not an economy pause.
-export const BULLET_TIME_GOOD_MS = 260
-export const BULLET_TIME_PERFECT_MS = 420
-export const BULLET_TIME_DT_SCALE = 0.32
+// v0.4I: lengthened (260/420 -> 380/620) and slowed further (0.32 -> 0.26) --
+// "bullet time is not noticeable" was a loud playtest note. A short full-stop
+// freeze (BULLET_TIME_FREEZE_MS) now leads it: hit -> freeze -> slow-mo ->
+// speed returns, instead of dropping straight into the crawl.
+export const BULLET_TIME_GOOD_MS = 380
+export const BULLET_TIME_PERFECT_MS = 620
+export const BULLET_TIME_DT_SCALE = 0.26
+// v0.4I: a tiny full-stop beat immediately on a clean crack hit, before the
+// slow-mo crawl above takes over -- the "impact freeze" frame. Scoped the same
+// way (chart/resistance advance only; idleTicks/decay/passive income never see
+// it), so it can never stall real progress, only the ambient wall/candle motion.
+export const BULLET_TIME_FREEZE_MS = 100
 // Anti-pin: the chart sitting above the line this long without a clean break is
 // force-rejected, so it can never ride the line up into the ceiling. Shorter than
 // the slowest tap cadence would keep a line alive, so continuous play (which

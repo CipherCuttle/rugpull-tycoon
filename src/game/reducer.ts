@@ -80,6 +80,7 @@ import {
   isResistanceFocusReady,
   resolveBreakoutTap,
   BULLET_TIME_DT_SCALE,
+  BULLET_TIME_FREEZE_MS,
   BULLET_TIME_GOOD_MS,
   BULLET_TIME_PERFECT_MS,
   CHART_HEAT_PER_TAP,
@@ -161,6 +162,7 @@ export function createInitialGame(): GameState {
     overdriveUntil: 0,
     breakoutQualityScore: 0,
     bulletTimeUntil: 0,
+    bulletFreezeUntil: 0,
     fountainEvents: [],
     fountainSeq: 0,
     chart,
@@ -801,6 +803,7 @@ function resolveResistanceTap(
       ...state,
       resistance: nextResistance,
       bulletTimeUntil: now + (perfect ? BULLET_TIME_PERFECT_MS : BULLET_TIME_GOOD_MS),
+      bulletFreezeUntil: now + BULLET_TIME_FREEZE_MS,
     }
     // Breakout pop: a punchy upward impulse through where the line was. The target
     // is already frozen ('broken'), so this extra step won't reopen a window.
@@ -1490,9 +1493,12 @@ function runTick(state: GameState, now: number, dtSeconds = 1): GameState {
 
   // v0.4H Bullet Time: shrink only the chart/resistance advance while a recent
   // crack hit's slow-mo window is live — the real `boundedDt` still drives
-  // idleTicks/decay inside applyChartGravity.
+  // idleTicks/decay inside applyChartGravity. v0.4I: a short full-stop freeze
+  // (bulletFreezeUntil) leads the slow-mo crawl so the hit reads as an actual
+  // impact beat, not just a gradual slowdown.
+  const bulletFreezeActive = now > 0 && now < next.bulletFreezeUntil
   const bulletTimeActive = now > 0 && now < next.bulletTimeUntil
-  const chartDt = bulletTimeActive ? boundedDt * BULLET_TIME_DT_SCALE : boundedDt
+  const chartDt = bulletFreezeActive ? 0 : bulletTimeActive ? boundedDt * BULLET_TIME_DT_SCALE : boundedDt
 
   // Chart Gravity runs every launched tick regardless of passive, so the idle
   // grace timer advances and decay can engage even with zero passive income.
