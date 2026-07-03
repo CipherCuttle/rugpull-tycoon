@@ -95,6 +95,7 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         supercharged={supercharged}
         overdrive={overdrive}
         fountainEvents={state.fountainEvents}
+        bulletTime={state.bulletTimeUntil > Date.now()}
       />
       <StreakBurst effect={state.streakEffect} />
 

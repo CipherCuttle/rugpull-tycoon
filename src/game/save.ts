@@ -106,6 +106,10 @@ function migrateGameState(value: GameState): GameState {
     // closed (0) on next load — no different from a fresh run that hasn't landed
     // a breakout yet.
     breakoutQualityScore: raw.breakoutQualityScore ?? 0,
+    // v0.4H Bullet Time: additive, absolute ms epoch. Any saved value is a few
+    // hundred ms at most and long past by the time a save loads, so it just
+    // reads as inactive — no clamping needed, same as overdriveUntil above.
+    bulletTimeUntil: raw.bulletTimeUntil ?? 0,
     fountainEvents: [],
     fountainSeq: raw.fountainSeq ?? 0,
     // v0.3.4 Candlestick Physics: additive. Old saves (which stored surfPressure

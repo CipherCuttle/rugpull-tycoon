@@ -265,6 +265,11 @@ export interface GameState {
   // being full) — see economy.ts and reducer.ts's updateStreakMeters. Consumed
   // (reset to 0) the instant Overdrive fires, so it must be re-earned per window.
   breakoutQualityScore: number
+  // v0.4H Bullet Time: ms epoch until which a clean crack hit's slow-motion
+  // beat holds. Only the ambient chart/resistance advance reads this (see
+  // reducer.ts applyChartGravity) -- passive income and Chart Gravity decay
+  // always run on the real clock. 0 when no bullet time is active.
+  bulletTimeUntil: number
   // v0.3.5: capped ring of floating-combat-text bursts (visual only). See
   // FountainEvent. `fountainSeq` is the monotonic id source.
   fountainEvents: FountainEvent[]

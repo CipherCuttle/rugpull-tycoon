@@ -1618,13 +1618,15 @@ h2 {
 
 .chart-resistance-line.halo {
   stroke: rgba(255, 194, 58, 0.28);
-  stroke-width: 11;
+  stroke-width: 17;
   filter: drop-shadow(0 0 9px rgba(255, 194, 58, 0.65));
 }
 
+/* v0.4H: thicker/chunkier — the wall should read as a proper sell wall, not a
+   thin trip-line. */
 .chart-resistance-line.core {
   stroke: var(--amber);
-  stroke-width: 5;
+  stroke-width: 10;
 }
 
 /* v0.4A phase-driven line states. Approaching brightens the line so the player
@@ -1822,14 +1824,6 @@ h2 {
   text-shadow: 0 0 10px rgba(255, 59, 82, 0.7);
 }
 
-.chart-smash-window {
-  fill: rgba(255, 194, 58, 0.14);
-  stroke: rgba(255, 255, 255, 0.55);
-  stroke-width: 1;
-  filter: drop-shadow(0 0 10px rgba(255, 194, 58, 0.55));
-  animation: resistance-pulse 280ms ease-out infinite;
-}
-
 .chart-active-tip circle:first-child {
   fill: rgba(70, 224, 255, 0.16);
   stroke: rgba(70, 224, 255, 0.6);
@@ -1850,6 +1844,42 @@ h2 {
 .chart-active-tip.ready circle:last-child {
   fill: #fff;
   filter: drop-shadow(0 0 10px rgba(255, 194, 58, 0.95));
+}
+
+/* v0.4H Flappy tap-pop: a quick squash-then-settle on the candle head itself,
+   isolated on an inner group (see the comment in FakeChart.tsx) so it can't
+   clobber the head's own position transform. */
+.chart-active-tip-flap.pop {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: head-flap 180ms ease-out;
+}
+
+.chart-tap-spark {
+  fill: rgba(255, 247, 184, 0.9);
+  filter: drop-shadow(0 0 6px rgba(255, 194, 58, 0.85));
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: tap-spark-burst 220ms ease-out forwards;
+}
+
+/* v0.4H Bullet Time: a brief Max Payne-style confirmation pulse right after a
+   crack hit — the panel's own light flexes, plus an expanding ring overlay,
+   then it's gone. Layered on top of the existing breakout/shatter flashes,
+   never replacing them. */
+.hero-chart.bullet-time {
+  animation: bullet-time-flex 320ms ease-out;
+}
+
+.hero-chart.bullet-time::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
+  animation: bullet-time-ring 320ms ease-out forwards;
 }
 
 .hero-chart.smash-window {
@@ -2697,18 +2727,6 @@ h2 {
   }
 }
 
-@keyframes resistance-pulse {
-  0% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0.62;
-  }
-}
-
 /* v0.4A resistance state motion. */
 @keyframes resistance-line-pulse {
   0%,
@@ -2813,6 +2831,53 @@ h2 {
   100% {
     r: 8.5;
     opacity: 0.2;
+  }
+}
+
+/* v0.4H Flappy tap-pop + Bullet Time keyframes. */
+@keyframes head-flap {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scale(1.35, 0.7);
+  }
+  60% {
+    transform: scale(0.85, 1.2);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes tap-spark-burst {
+  0% {
+    opacity: 1;
+    transform: scale(0.4) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.6) rotate(18deg);
+  }
+}
+
+@keyframes bullet-time-flex {
+  0% {
+    filter: brightness(1.5) saturate(1.3);
+  }
+  100% {
+    filter: brightness(1) saturate(1);
+  }
+}
+
+@keyframes bullet-time-ring {
+  0% {
+    opacity: 0.9;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.7), inset 0 0 26px rgba(255, 255, 255, 0.3);
+  }
+  100% {
+    opacity: 0;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0), inset 0 0 0 rgba(255, 255, 255, 0);
   }
 }
 
@@ -3079,8 +3144,11 @@ h2 {
   .curve-rail.decaying .curve-rail-fill,
   .chart-gravity-flag.bleeding,
   .chart-overheat-flag,
-  .chart-smash-window,
   .chart-active-tip.ready circle:first-child,
+  .chart-active-tip-flap.pop,
+  .chart-tap-spark,
+  .hero-chart.bullet-time,
+  .hero-chart.bullet-time::before,
   .hero-chart.breakout-perfect .fake-chart,
   .hero-chart.breakout .fake-chart,
   .hero-chart.missed-crack .fake-chart,

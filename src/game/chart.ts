@@ -44,18 +44,20 @@ const HARD_MAX = 104
 // Soft band: outside it, restoring forces kick in so the price wicks back.
 const SOFT_MIN = 18
 const SOFT_MAX = 76
-// Constant downward pull on velocity (price/s^2). Terminal idle fall ≈
-// BASE_GRAVITY / FRICTION ≈ 12/s, so idle drop is obvious within a second.
-const BASE_GRAVITY = 23
+// Constant downward pull on velocity (price/s^2). v0.4H Flappy rebuild: raised
+// from 23 so the drop between taps reads as a clear, natural dump ("wait to
+// drop") instead of a lazy drift.
+const BASE_GRAVITY = 32
 // Extra downward pull per price-unit above SOFT_MAX — the anti-pinning force.
 const HIGH_PRESSURE_K = 1.75
 // Upward bounce per price-unit below SOFT_MIN — dead coins rest around the Dead/
 // Warming band (~18–24) instead of pinning to the absolute floor. Stiff enough
 // to balance gravity a little below SOFT_MIN.
 const LOW_BOUNCE_K = 3.8
-// Velocity damping per second. Lowish so taps carry momentum (surf) and idle
-// falls at a lively terminal speed.
-const FRICTION = 1.9
+// Velocity damping per second. v0.4H: raised from 1.9 so a tap's pop settles
+// into the next drop instead of carrying a long sluggish tail — punchier
+// pump-then-fall rhythm, still leaves a beat of inertia between taps.
+const FRICTION = 2.3
 const VELOCITY_MAX = 66
 // Random velocity jitter per second — what turns the line into candles.
 const NOISE_AMP = 27
@@ -76,12 +78,15 @@ const CANDLE_PERIOD = 0.2
 const MAX_CANDLES = 34
 
 // Base velocity impulse of a single tap, before upgrade/combo shaping (see
-// economy.getChartTapImpulse). Kept here with the rest of the feel constants.
-export const CHART_TAP_IMPULSE_BASE = 8.5
+// economy.getChartTapImpulse). v0.4H: nearly doubled from 8.5 — a Flappy Bird
+// flap has to be an obvious, immediate pump, not a nudge.
+export const CHART_TAP_IMPULSE_BASE = 15
 // Chart heat added per tap. Balanced against HEAT_DECAY for the 3-vs-5 taps/s split.
 export const CHART_HEAT_PER_TAP = 6
-// Mini physics step run on each tap for instant on-screen feedback.
-export const CHART_TAP_STEP = 0.05
+// Mini physics step run on each tap for instant on-screen feedback. v0.4H:
+// doubled from 0.05 — the head must visibly move within the first ~100ms of a
+// tap, not wait on the next 120ms game tick to carry the impulse.
+export const CHART_TAP_STEP = 0.1
 
 // --- v0.4G Straight Sell Wall ---
 // Player = the candle/chart head, the only snake-like thing on screen. Enemy =
@@ -96,7 +101,7 @@ export const CHART_TAP_STEP = 0.05
 // and any tap breaks the line. v0.4D: lengthened from 320 so the GET READY ->
 // SMASH NOW handoff isn't a hair-trigger -- a deliberate tap rhythm gets a real
 // beat to react in, not just a spam-favoring reflex check.
-export const RESISTANCE_WINDOW_MS = 420
+export const RESISTANCE_WINDOW_MS = 480
 // How fast a live line's anchor drifts down toward a chart stalled below it,
 // keeping the target reachable instead of parked out of reach.
 export const RESISTANCE_DRIFT_PER_SEC = 2
@@ -118,11 +123,18 @@ export const RESISTANCE_BROKEN_HOLD_MS = 620
 export const RESISTANCE_MISSED_HOLD_MS = 520
 export const RESISTANCE_REJECTED_HOLD_MS = 760
 export const RESISTANCE_OVERHEAT_HOLD_MS = 560
-export const RESISTANCE_MAX_CRACK_PIPS = 3
+// v0.4H: 3 -> 4 pips, paired with perfect hits now costing 2 (see reducer.ts) so
+// shatter still comes from a real streak instead of every clean hit chaining
+// into one, but a run of perfects can still shatter noticeably faster than an
+// all-good one.
+export const RESISTANCE_MAX_CRACK_PIPS = 4
 // Vertical (price) hit band for the crack socket -- how close the wall's live
 // height has to be to the chart's price for a breakout to also crack the wall.
-export const RESISTANCE_CRACK_ALIGN_BAND = 3.7
-export const RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE = 7.4
+// v0.4H: widened (3.7 -> 6.2, 7.4 -> 11.5) -- "hitting the crack is too hard"
+// was the single loudest playtest note, and the wall is now wide/slow enough
+// that a generous hitbox doesn't trivialize aiming.
+export const RESISTANCE_CRACK_ALIGN_BAND = 6.2
+export const RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE = 11.5
 // Where along the wall's own length the crack can spawn (0 = back edge, 1 =
 // front edge) -- kept off the extreme edges so it always reads as "somewhere
 // on the wall", never right at a seam.
@@ -139,23 +151,50 @@ export const RESISTANCE_SHATTER_HOLD_MS = 900
 export const RESISTANCE_LANE_MIN = 0
 export const RESISTANCE_LANE_HEAD = 100
 // The wall's own length in lane units -- the crack rides somewhere inside this
-// span, centered on the wall's current lane position.
-export const RESISTANCE_WALL_LANE_SPAN = 34
+// span, centered on the wall's current lane position. v0.4H: widened (34 -> 54)
+// so it reads as a proper wide sell wall crossing the lane, not a thin bar.
+export const RESISTANCE_WALL_LANE_SPAN = 54
 // Horizontal sweep: how long one full lane_min -> lane_head -> lane_min cycle
 // takes. Overdrive slows it so a wide-open crack lingers in reach longer
-// instead of just widening the hitbox around a fast-moving point.
-export const RESISTANCE_LANE_SWEEP_PERIOD_MS = 3400
-export const RESISTANCE_LANE_SWEEP_PERIOD_MS_OVERDRIVE_SCALE = 1.6
+// instead of just widening the hitbox around a fast-moving point. v0.4H:
+// slowed from 3400 -- "wall moves too fast" was the other loud playtest note.
+export const RESISTANCE_LANE_SWEEP_PERIOD_MS = 5400
+export const RESISTANCE_LANE_SWEEP_PERIOD_MS_OVERDRIVE_SCALE = 1.5
 // Vertical bob: the wall's whole straight bar rides up/down around its
-// drift-managed anchor price, on an independent period/phase from the
-// horizontal sweep so the two axes don't line up in lockstep.
-export const RESISTANCE_VERTICAL_BOB_PERIOD_MS = 2600
+// drift-managed anchor price, on an independent (but now closer, so the pair
+// reads as one diagonal glide rather than two unrelated wiggles) period/phase
+// from the horizontal sweep.
+export const RESISTANCE_VERTICAL_BOB_PERIOD_MS = 3600
 export const RESISTANCE_VERTICAL_BOB_PERIOD_MS_OVERDRIVE_SCALE = 1.4
-export const RESISTANCE_VERTICAL_BOB_AMPLITUDE = 9
+export const RESISTANCE_VERTICAL_BOB_AMPLITUDE = 8
 // Horizontal hit band for the crack socket -- how close its lane has to be to
-// the head's fixed lane (100) for a breakout to also crack the wall.
-export const RESISTANCE_LANE_ALIGN_BAND = 13
-export const RESISTANCE_LANE_ALIGN_BAND_OVERDRIVE = 26
+// the head's fixed lane (100) for a breakout to also crack the wall. v0.4H:
+// widened alongside the vertical crack band -- see note above.
+export const RESISTANCE_LANE_ALIGN_BAND = 19
+export const RESISTANCE_LANE_ALIGN_BAND_OVERDRIVE = 34
+// v0.4H: the first few walls of a run sweep slower and forgive a wider miss,
+// easing a fresh (or post-graduation) run into the timing instead of throwing
+// full speed at it immediately. Eases back to 1x by wall RESISTANCE_EARLY_WALL_COUNT + 1.
+const RESISTANCE_EARLY_WALL_COUNT = 3
+const RESISTANCE_EARLY_SPEED_SCALE = 1.55
+const RESISTANCE_EARLY_BAND_SCALE = 1.4
+
+function getEarlyLeniencyScale(id: number, factor: number): number {
+  if (id < 1 || id > RESISTANCE_EARLY_WALL_COUNT) {
+    return 1
+  }
+  const t = (id - 1) / RESISTANCE_EARLY_WALL_COUNT
+  return factor - (factor - 1) * t
+}
+
+// v0.4H Bullet Time: on a clean crack hit, the ambient wall/gravity advance
+// (not the tap's own instant impulse -- see CHART_TAP_STEP) briefly slows to a
+// crawl, then ramps back to normal. Scoped to chart/resistance ticks only (see
+// reducer.ts applyChartGravity) so passive income and Chart Gravity decay never
+// see the slowed clock -- this is a feel beat, not an economy pause.
+export const BULLET_TIME_GOOD_MS = 260
+export const BULLET_TIME_PERFECT_MS = 420
+export const BULLET_TIME_DT_SCALE = 0.32
 // Anti-pin: the chart sitting above the line this long without a clean break is
 // force-rejected, so it can never ride the line up into the ceiling. Shorter than
 // the slowest tap cadence would keep a line alive, so continuous play (which
@@ -224,16 +263,18 @@ export function moveResistanceCrackTarget(resistance: ResistanceState): Resistan
   }
 }
 
-export function getResistanceLaneSweepPeriodMs(overdriveActive = false): number {
-  return overdriveActive
+export function getResistanceLaneSweepPeriodMs(overdriveActive = false, id = 0): number {
+  const base = overdriveActive
     ? RESISTANCE_LANE_SWEEP_PERIOD_MS * RESISTANCE_LANE_SWEEP_PERIOD_MS_OVERDRIVE_SCALE
     : RESISTANCE_LANE_SWEEP_PERIOD_MS
+  return base * getEarlyLeniencyScale(id, RESISTANCE_EARLY_SPEED_SCALE)
 }
 
-export function getResistanceVerticalBobPeriodMs(overdriveActive = false): number {
-  return overdriveActive
+export function getResistanceVerticalBobPeriodMs(overdriveActive = false, id = 0): number {
+  const base = overdriveActive
     ? RESISTANCE_VERTICAL_BOB_PERIOD_MS * RESISTANCE_VERTICAL_BOB_PERIOD_MS_OVERDRIVE_SCALE
     : RESISTANCE_VERTICAL_BOB_PERIOD_MS
+  return base * getEarlyLeniencyScale(id, RESISTANCE_EARLY_SPEED_SCALE)
 }
 
 // The wall's horizontal center right now, as a 0..1 fraction of its lane
@@ -241,7 +282,7 @@ export function getResistanceVerticalBobPeriodMs(overdriveActive = false): numbe
 // Phase-seeded by id so consecutive walls don't sweep in lockstep.
 function getResistanceLaneFrac(resistance: ResistanceState, now: number, overdriveActive = false): number {
   const phaseOffset = roll(resistance.id * 7.13) * Math.PI * 2
-  const period = getResistanceLaneSweepPeriodMs(overdriveActive)
+  const period = getResistanceLaneSweepPeriodMs(overdriveActive, resistance.id)
   const t = now <= 0 ? phaseOffset : (now / period) * Math.PI * 2 + phaseOffset
   return (Math.sin(t) + 1) / 2
 }
@@ -266,8 +307,9 @@ export function getResistanceLaneDistance(resistance: ResistanceState, now: numb
   return Math.abs(RESISTANCE_LANE_HEAD - getResistanceCrackLane(resistance, now, overdriveActive))
 }
 
-export function getResistanceLaneBand(overdriveActive = false): number {
-  return overdriveActive ? RESISTANCE_LANE_ALIGN_BAND_OVERDRIVE : RESISTANCE_LANE_ALIGN_BAND
+export function getResistanceLaneBand(overdriveActive = false, id = 0): number {
+  const base = overdriveActive ? RESISTANCE_LANE_ALIGN_BAND_OVERDRIVE : RESISTANCE_LANE_ALIGN_BAND
+  return base * getEarlyLeniencyScale(id, RESISTANCE_EARLY_BAND_SCALE)
 }
 
 // The wall's vertical bob offset right now, added on top of its drift-managed
@@ -275,7 +317,7 @@ export function getResistanceLaneBand(overdriveActive = false): number {
 // the wall doesn't just trace a diagonal.
 export function getResistanceVerticalBobOffset(resistance: ResistanceState, now: number, overdriveActive = false): number {
   const phaseOffset = roll(resistance.id * 3.71 + 1.9) * Math.PI * 2
-  const period = getResistanceVerticalBobPeriodMs(overdriveActive)
+  const period = getResistanceVerticalBobPeriodMs(overdriveActive, resistance.id)
   const t = now <= 0 ? phaseOffset : (now / period) * Math.PI * 2 + phaseOffset
   return Math.sin(t) * RESISTANCE_VERTICAL_BOB_AMPLITUDE
 }
@@ -292,8 +334,9 @@ export function getResistanceCrackPrice(resistance: ResistanceState, now: number
   return getResistanceWallPrice(resistance, now, overdriveActive)
 }
 
-export function getResistanceCrackBand(overdriveActive = false): number {
-  return overdriveActive ? RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE : RESISTANCE_CRACK_ALIGN_BAND
+export function getResistanceCrackBand(overdriveActive = false, id = 0): number {
+  const base = overdriveActive ? RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE : RESISTANCE_CRACK_ALIGN_BAND
+  return base * getEarlyLeniencyScale(id, RESISTANCE_EARLY_BAND_SCALE)
 }
 
 // Vertical distance from the snake head (chart price) to the crack socket
@@ -318,8 +361,9 @@ export function isResistanceCrackAligned(
   overdriveActive = false,
 ): boolean {
   return (
-    getResistanceCrackAlignmentDistance(resistance, chart, now, overdriveActive) <= getResistanceCrackBand(overdriveActive) &&
-    getResistanceLaneDistance(resistance, now, overdriveActive) <= getResistanceLaneBand(overdriveActive)
+    getResistanceCrackAlignmentDistance(resistance, chart, now, overdriveActive) <=
+      getResistanceCrackBand(overdriveActive, resistance.id) &&
+    getResistanceLaneDistance(resistance, now, overdriveActive) <= getResistanceLaneBand(overdriveActive, resistance.id)
   )
 }
 

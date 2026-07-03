@@ -34,6 +34,9 @@ interface FakeChartProps {
   // its lanes are positioned relative to the chart panel's own box and can never
   // drift over the resistance line/Smash Window.
   fountainEvents: FountainEvent[]
+  // v0.4H: true for a brief window right after a crack hit -- drives the
+  // Max Payne-style bullet-time pulse (see reducer.ts bulletTimeUntil).
+  bulletTime: boolean
 }
 
 const TAP_FLASH_MS = 220
@@ -61,6 +64,7 @@ export function FakeChart({
   supercharged,
   overdrive,
   fountainEvents,
+  bulletTime,
 }: FakeChartProps) {
   const clamped = Math.max(0, Math.min(100, progress))
 
@@ -193,8 +197,11 @@ export function FakeChart({
   const crackX = Math.max(4, Math.min(WIDTH - 4, laneToX(crackLane)))
   const crackPrice = getResistanceCrackPrice(resistance, now, overdrive)
   const crackY = priceToY(crackPrice)
-  const crackPriceBandPx = Math.max(6, (getResistanceCrackBand(overdrive) / (DISPLAY_MAX - DISPLAY_MIN)) * HEIGHT)
-  const crackLaneBandPx = Math.max(6, Math.abs(laneToX(RESISTANCE_LANE_HEAD - getResistanceLaneBand(overdrive)) - laneToX(RESISTANCE_LANE_HEAD)))
+  const crackPriceBandPx = Math.max(6, (getResistanceCrackBand(overdrive, resistance.id) / (DISPLAY_MAX - DISPLAY_MIN)) * HEIGHT)
+  const crackLaneBandPx = Math.max(
+    6,
+    Math.abs(laneToX(RESISTANCE_LANE_HEAD - getResistanceLaneBand(overdrive, resistance.id)) - laneToX(RESISTANCE_LANE_HEAD)),
+  )
   // v0.4G: "hot" means the head is actually within striking distance of the
   // socket on BOTH axes — the same 2D check the reducer uses to score a hit,
   // not a second marker's position lining up with the crack's.
@@ -216,7 +223,7 @@ export function FakeChart({
       } ${broken ? 'breakout' : ''} ${missed ? 'missed-crack' : ''} ${shattered ? 'shattered' : ''} ${
         brokenPerfect ? 'breakout-perfect' : ''
       } ${rejected ? 'resistance-rejected' : ''
-      }`}
+      } ${bulletTime ? 'bullet-time' : ''}`}
       aria-label="Fake chart"
     >
       {gravityFlag ? <span className={`chart-gravity-flag ${gravityFlagKind}`}>{gravityFlag}</span> : null}
@@ -238,16 +245,10 @@ export function FakeChart({
       </div>
       <svg className="fake-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Fictional candlestick chart">
         <g className={`chart-resistance-target resistance-${phase}`} aria-hidden="true">
-          {smash ? (
-            <rect
-              className="chart-smash-window"
-              x={Math.min(WIDTH - (overdrive ? 54 : 40), Math.max(segmentX - 6, crackX - (overdrive ? 25 : 18)))}
-              y={Math.max(0, crackY - crackPriceBandPx - 3)}
-              width={overdrive ? 50 : 36}
-              height={crackPriceBandPx * 2 + 6}
-              rx={4}
-            />
-          ) : null}
+          {/* v0.4H: the old SMASH NOW rectangle was a second target marker
+              layered over the crack socket -- removed so there is exactly one
+              glowing weak point on screen. The socket's own 'ready'/'hot'
+              classes below already carry the "smash now" read. */}
           {/* v0.4G: the wall is a single straight bar — it never bows or
               curves. It slides as a rigid whole; only its lane (x) and live
               height (y) change tick to tick. */}
@@ -315,9 +316,31 @@ export function FakeChart({
             <path className="chart-bonus-spark" d="M 0 -13 L 2 -4 L 10 -7 L 4 0 L 11 5 L 2 4 L 0 13 L -2 4 L -11 5 L -4 0 L -10 -7 L -2 -4 Z" />
           </g>
         ) : null}
-        <g className={`chart-active-tip ${smash ? 'ready' : ''}`} aria-hidden="true">
-          <circle cx={currentCx} cy={currentCy} r="5.8" />
-          <circle cx={currentCx} cy={currentCy} r="2.5" />
+        {/* v0.4H: a one-shot spark burst on the candle head itself, keyed by
+            tapEffect.id so every tap remounts (and replays) it -- the tactile
+            "flap" pop the Flappy-feel pass asked for, on top of the squash
+            transform below. */}
+        {tapFlash && tapEffect ? (
+          <g key={`spark-${tapEffect.id}`} transform={`translate(${currentCx} ${currentCy})`} aria-hidden="true">
+            <path
+              className="chart-tap-spark"
+              d="M 0 -9 L 1.6 -2.6 L 7 -5 L 2.6 -1 L 8 3 L 1.6 2.2 L 0 9 L -1.6 2.2 L -8 3 L -2.6 -1 L -7 -5 L -1.6 -2.6 Z"
+            />
+          </g>
+        ) : null}
+        <g
+          className={`chart-active-tip ${smash ? 'ready' : ''}`}
+          transform={`translate(${currentCx} ${currentCy})`}
+          aria-hidden="true"
+        >
+          {/* Squash-pop lives on an inner group with no position transform of its
+              own -- same reason as .chart-crack-pulse: a CSS transform here
+              would otherwise replace the outer translate(currentCx currentCy)
+              outright and teleport the head to the SVG origin. */}
+          <g className={`chart-active-tip-flap ${tapFlash ? 'pop' : ''}`}>
+            <circle r="5.8" />
+            <circle r="2.5" />
+          </g>
         </g>
       </svg>
       <div className={`curve-rail ${isDecaying ? 'decaying' : ''}`} aria-label="Bonding curve progress">

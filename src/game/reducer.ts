@@ -79,6 +79,9 @@ import {
   isResistanceCrackAligned,
   isResistanceFocusReady,
   resolveBreakoutTap,
+  BULLET_TIME_DT_SCALE,
+  BULLET_TIME_GOOD_MS,
+  BULLET_TIME_PERFECT_MS,
   CHART_HEAT_PER_TAP,
   CHART_TAP_STEP,
   OVERHEAT,
@@ -157,6 +160,7 @@ export function createInitialGame(): GameState {
     superchargeFullMs: 0,
     overdriveUntil: 0,
     breakoutQualityScore: 0,
+    bulletTimeUntil: 0,
     fountainEvents: [],
     fountainSeq: 0,
     chart,
@@ -267,6 +271,7 @@ const OVERDRIVE_START_LINES = [
   'OVERDRIVE - THE WALL IS SOFT',
   'OVERDRIVE - PRECISION WINDOW OPEN',
   'OVERDRIVE - AIM THE CANDLE',
+  'OVERDRIVE - NO CONSCIENCE, STILL AIM',
 ]
 
 function stampStreakReward(state: GameState, combo: number): GameState {
@@ -584,16 +589,18 @@ const BREAKOUT_SUPERCHARGE_GAIN_GOOD = 8
 const BREAKOUT_SUPERCHARGE_GAIN_FOCUS = 5
 const SHATTER_SUPERCHARGE_GAIN = 24
 const SHATTER_IMPULSE = 12.5
-const MISSED_CRACK_DUMP = 8
-const OVERDRIVE_MISSED_CRACK_DUMP = 4
+// v0.4H: bumped (8 -> 10, 4 -> 5) so a miss reads as a physical slap — the
+// candle head visibly loses its upward pump instead of just fizzling.
+const MISSED_CRACK_DUMP = 10
+const OVERDRIVE_MISSED_CRACK_DUMP = 5
 const PANIC_TAP_GAP_MS = 240
 const BONUS_TARGET_LIFETIME_MS = 2100
 const BONUS_TARGET_BAND = 6
 const BONUS_TARGET_BAND_OVERDRIVE = 8.5
 
-// v0.4G: compact degen miss/shatter labels — one picked per event, never all
+// v0.4H: compact degen miss/shatter labels — one picked per event, never all
 // of them at once, so the same beat doesn't read as sterile every single time.
-const MISS_LABELS = ['MISSED CRACK', 'JEET SLAP', 'JEETS ATE IT', 'ROOM GOT SUSPICIOUS', 'STOP MASHING']
+const MISS_LABELS = ['JEET SLAP', 'WALL ATE IT', 'ROOM GOT SUSPICIOUS', 'STOP MASHING', 'JEETS NOTICED']
 const SHATTER_LABELS = ['SHATTERED', 'WALL GOT LIQUIDATED', 'ROOM LOST CONTROL']
 
 type BreakoutReward = {
@@ -764,10 +771,12 @@ function resolveResistanceTap(
     const focusPerfect = wasFocusReady && wasSmash
     const overdrivePerfect = isOverdrive && alignmentDistance <= 3.2
     const perfect = outcome === 'breakout-perfect' || focusPerfect || overdrivePerfect
-    // v0.4F: flat 1 pip per clean hit — perfect already pays out bigger currency/
-    // Supercharge/quality gains below, so it no longer also halves the streak
-    // needed to shatter. Shatter now always costs a real, uninterrupted streak.
-    const crackPips = Math.max(0, state.resistance.crackPips - 1)
+    // v0.4H: perfect hits now cost 2 pips (good still 1, on RESISTANCE_MAX_CRACK_PIPS
+    // = 4) — a shatter is still a real, uninterrupted streak, but pure precision
+    // (a run of perfects) can close it out noticeably faster than grinding good
+    // hits, so "perfect/focus hit can damage more" without making every clean
+    // hit chain straight into a shatter.
+    const crackPips = Math.max(0, state.resistance.crackPips - (perfect ? 2 : 1))
     const shattered = crackPips === 0
     const streak = state.resistance.crackHitStreak + 1
     const nextResistance: ResistanceState = {
@@ -785,9 +794,13 @@ function resolveResistanceTap(
       focusStartedAt: 0,
       aboveSinceMs: 0,
     }
+    // v0.4H Bullet Time: a clean crack hit briefly slows the ambient wall/
+    // gravity advance — the Max Payne confirmation beat. Perfect holds it a
+    // touch longer than good.
     let next: GameState = {
       ...state,
       resistance: nextResistance,
+      bulletTimeUntil: now + (perfect ? BULLET_TIME_PERFECT_MS : BULLET_TIME_GOOD_MS),
     }
     // Breakout pop: a punchy upward impulse through where the line was. The target
     // is already frozen ('broken'), so this extra step won't reopen a window.
@@ -1257,7 +1270,7 @@ function graduateCoin(state: GameState): GameState {
 // the *fractional* bondingCurveProgress within the current tier band, floored at
 // TIER_FLOORS[bondingCurveTier]. It never touches the tier, liquidity, cards,
 // upgrades, resources, or event progress, and never calls milestone crossing.
-function applyChartGravity(state: GameState, now: number, dtSeconds: number): GameState {
+function applyChartGravity(state: GameState, now: number, dtSeconds: number, chartDtSeconds = dtSeconds): GameState {
   const idleTicks = state.idleTicks + dtSeconds
 
   // v0.3.4: advance the visual candle chart every tick. When the player isn't
@@ -1265,6 +1278,10 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
   // lift so the chart still "breathes" while you rest. Fully cosmetic.
   // v0.3.5: during Overdrive the idle ticks between mashes must not cook heat or
   // trigger a reversal either, or a fast masher's gaps would still punish them.
+  // v0.4H: the chart/resistance advance runs on `chartDtSeconds`, which the
+  // caller (runTick) shrinks during an active Bullet Time window — idleTicks
+  // above and the decay math below both stay on the real `dtSeconds`, so a
+  // crack-hit slow-mo beat never pauses passive income or Chart Gravity decay.
   const overdriveActive = getIsOverdrive(state.overdriveUntil, now)
   const prevPhase = state.resistance.phase
   // v0.4B: while the target is mid-TOO-HOT-scold, idle ticks bleed heat faster —
@@ -1274,7 +1291,7 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
   const recoveringFromOverheat = prevPhase === 'overheated'
   const base: GameState = advanceChartState(
     { ...state, idleTicks },
-    dtSeconds,
+    chartDtSeconds,
     {
       gravityScale: getChartGravityScale(state) * getResistancePhaseGravityScale(prevPhase) * (overdriveActive ? 0.72 : 1),
       frictionScale: overdriveActive ? 0.74 : 1,
@@ -1471,9 +1488,15 @@ function runTick(state: GameState, now: number, dtSeconds = 1): GameState {
     next = syncEvent(next)
   }
 
+  // v0.4H Bullet Time: shrink only the chart/resistance advance while a recent
+  // crack hit's slow-mo window is live — the real `boundedDt` still drives
+  // idleTicks/decay inside applyChartGravity.
+  const bulletTimeActive = now > 0 && now < next.bulletTimeUntil
+  const chartDt = bulletTimeActive ? boundedDt * BULLET_TIME_DT_SCALE : boundedDt
+
   // Chart Gravity runs every launched tick regardless of passive, so the idle
   // grace timer advances and decay can engage even with zero passive income.
-  next = applyChartGravity(next, now, boundedDt)
+  next = applyChartGravity(next, now, boundedDt, chartDt)
 
   // v0.3.5: advance the Supercharge/Overdrive meters off the (now-updated) combo.
   return updateStreakMeters(next, now, boundedDt)
