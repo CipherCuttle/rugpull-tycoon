@@ -1,4 +1,5 @@
 import { useState, type Dispatch } from 'react'
+import { BagPanel } from '../components/BagPanel'
 import { CardAlbum } from '../components/CardAlbum'
 import { DevTuningStats } from '../components/DevTuningStats'
 import { EventPanel } from '../components/EventPanel'
@@ -106,6 +107,9 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         onSend={() => dispatch({ type: 'SEND_CANDLE', now: Date.now() })}
         onGraduateClick={() => setPrestigeOpen(true)}
       />
+
+      {/* 3b. Bag + Rug It: the risk/reward layer on top of the resistance loop */}
+      <BagPanel state={state} onRugIt={() => dispatch({ type: 'RUG_IT', now: Date.now() })} />
 
       {/* 4. BOTTOM OBJECTIVE */}
       <p className="objective-line">{objective}</p>

@@ -29,6 +29,7 @@ import {
   COMBO_WINDOW_MS,
   COPE_CRATE_COST,
   GRACE_TICKS,
+  getBagCrackReward,
   getBondingCurveDelta,
   getBondingCurveTier,
   getBreakoutComboScale,
@@ -56,11 +57,17 @@ import {
   getTierFloor,
   getTotalUpgradeLevels,
   getUpgradeCost,
+  isDangerousHeat,
+  MAJOR_FAILURE_HEAT_THRESHOLD,
   OVERDRIVE_ARM_MS,
   OVERDRIVE_CRIT_BONUS,
   OVERDRIVE_CURVE_BONUS,
   OVERDRIVE_DURATION_MS,
   OVERDRIVE_IMPULSE_SCALE,
+  RUG_NORMAL_BANK_RATE,
+  RUG_PANIC_BANK_RATE,
+  RUG_WINDOW_BANK_RATE,
+  RUG_WINDOW_MS,
   SUPERCHARGE_CHAIN_MIN,
   SUPERCHARGE_DECAY_PER_SEC,
   SUPERCHARGE_HEAT_SCALE,
@@ -104,6 +111,7 @@ import type {
   GameState,
   ResistanceState,
   ResourceState,
+  RugEventKind,
   TapRating,
   ToastKind,
 } from './types'
@@ -195,6 +203,13 @@ export function createInitialGame(): GameState {
     streakEffect: null,
     majorEvent: null,
     effectSeq: 0,
+    runBag: 0,
+    rentMoney: 0,
+    lostBag: 0,
+    lostBagDepth: null,
+    runDepth: 0,
+    rugWindowUntil: 0,
+    lastRugEvent: null,
   }
 }
 
@@ -684,6 +699,52 @@ function resolveBonusTarget(state: GameState, now: number, overdriveActive: bool
   return pushFountain(next, 'BONUS CAUGHT', 'supercharge')
 }
 
+// v0.5A Bag + Rug It + Lost Bag — compact degen copy, one line picked per event
+// so the same beat never reads as sterile every single time.
+const RUG_CLEAN_LINES = ['RUGGED CLEAN', 'BAG BANKED']
+const RUG_WINDOW_LINES = ['BAG BANKED', 'GREASY EXIT', "MOM WON'T KNOW"]
+const RUG_PANIC_LINES = ['PANIC RUG', "MOM WON'T KNOW"]
+const LOST_BAG_LINES = ['JEETS ATE THE BAG', 'WALL ATE THE LIQUIDITY', 'ROOM GOT SOBER', 'BAG FUMBLED', 'MOM CHECKED THE ROUTER']
+const RECOVER_BAG_LINES = ['LOST BAG RECOVERED', 'FOUND THE BAG', 'LIQUIDITY RETURNED', 'THE JEETS DROPPED IT']
+
+// Single non-blocking Bag/Rug event slot — same "one at a time, overwrite the
+// previous" pattern as stampToast, but kept separate so a rug/lost/recovered
+// beat never competes with (or gets clobbered by) an evidence/operator toast.
+function stampRugEvent(state: GameState, kind: RugEventKind, title: string, line: string): GameState {
+  const seq = state.effectSeq + 1
+  return { ...state, effectSeq: seq, lastRugEvent: { id: seq, kind, title, line } }
+}
+
+// A severe failure (deep overheat, or a rejection/miss while already
+// dangerously hot) sweeps the unbanked run bag into a recoverable Lost Bag
+// instead of deleting it outright. No-ops if there's nothing to lose — small
+// misses stay fully recoverable, only a real "you blew it" moment costs the
+// bag. Soulslike-style: an existing unrecovered Lost Bag is simply replaced,
+// it doesn't stack.
+function applyMajorFailure(state: GameState, failureLabel: string): GameState {
+  if (state.runBag <= 0) {
+    return state
+  }
+
+  const hadOldLostBag = state.lostBag > 0
+  let next: GameState = {
+    ...state,
+    lostBag: state.runBag,
+    lostBagDepth: state.runDepth,
+    runBag: 0,
+    runDepth: 0,
+  }
+
+  next = stampRugEvent(
+    next,
+    'lost',
+    failureLabel,
+    hadOldLostBag ? 'OLD BAG GONE — new bag lost instead' : 'Recoverable next run',
+  )
+
+  return addTicker(next, `${failureLabel} — the unbanked bag is gone.`)
+}
+
 // v0.4A Resistance Breakout. Read AFTER the tap's chart impulse has landed and
 // classify what it did to the line, then stamp the matching arcade event beat
 // (broken / rejected / overheated) plus its chart impulse and combat text. Returns
@@ -758,6 +819,12 @@ function resolveResistanceTap(
         now,
       )
       next = awardLiquidity(next, 0, bonusCurve)
+
+      // v0.5A: a missed crack while the chart is already dangerously hot is a
+      // real "you blew it" moment (not just a mistimed tap) — sweep the bag.
+      if (overheated) {
+        next = applyMajorFailure(next, pickLine(LOST_BAG_LINES, now))
+      }
 
       const missLabel = pickLine(MISS_LABELS, now)
       return {
@@ -836,6 +903,29 @@ function resolveResistanceTap(
       next.breakoutQualityScore + qualityGain,
     )
     next = { ...next, supercharge: Math.min(SUPERCHARGE_MAX, next.supercharge + superchargeGain), breakoutQualityScore }
+    // v0.5A Bag: clean/perfect crack hits build the unbanked run bag; a shatter
+    // adds a jackpot on top and opens a brief rug window (see RUG_IT in the
+    // reducer switch). A recoverable Lost Bag from an earlier failure returns
+    // once this run's depth climbs back up to where it was lost — Soulslike
+    // bloodstain style.
+    const bagGain = getBagCrackReward(perfect, shattered, isOverdrive)
+    const runDepth = next.runDepth + (shattered ? 1 : 0)
+    next = {
+      ...next,
+      runBag: next.runBag + bagGain,
+      runDepth,
+      rugWindowUntil: shattered ? now + RUG_WINDOW_MS : next.rugWindowUntil,
+    }
+    if (next.lostBag > 0 && next.lostBagDepth !== null && runDepth >= next.lostBagDepth) {
+      const recovered = next.lostBag
+      next = stampRugEvent(
+        { ...next, runBag: next.runBag + recovered, lostBag: 0, lostBagDepth: null },
+        'recovered',
+        pickLine(RECOVER_BAG_LINES, now),
+        `+${recovered} back in the bag`,
+      )
+      next = addTicker(next, `${pickLine(RECOVER_BAG_LINES, now + 3)} +${recovered} recovered into the bag.`)
+    }
     // v0.4D: the compact Supercharge-rail reward chip (breakoutReward, below)
     // already reports every breakout; a "GOOD BREAKOUT" fountain on top of it was
     // pure duplication for the common case, and the chain streak now lives in the
@@ -885,6 +975,11 @@ function resolveResistanceTap(
       },
     }
     next = pushFountain(next, 'TOO HOT', 'reject')
+    // v0.5A: only a genuinely severe overheat sweeps the bag — the ordinary
+    // TOO HOT scold stays fully recoverable.
+    if (state.chart.heat >= MAJOR_FAILURE_HEAT_THRESHOLD) {
+      next = applyMajorFailure(next, pickLine(LOST_BAG_LINES, now + 1))
+    }
     return {
       next,
       rating: 'overheated',
@@ -924,6 +1019,11 @@ function resolveResistanceTap(
     }
     next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: isOverdrive ? 6 : 14 }, now)
     next = pushFountain(next, 'REJECTED', 'reject')
+    // v0.5A: a rejection while already dangerously hot compounds into a real
+    // failure — a cool-chart rejection stays a recoverable miss.
+    if (overheated) {
+      next = applyMajorFailure(next, pickLine(LOST_BAG_LINES, now + 2))
+    }
     return {
       next,
       rating: 'rejected',
@@ -1214,6 +1314,45 @@ function openCopeCrate(state: GameState): GameState {
   return syncEvent(next)
 }
 
+// v0.5A: bank the unbanked run bag into permanent Rent Money. Rate depends on
+// timing — a post-shatter rug window pays a bonus, rugging while dangerously
+// hot (mid TOO HOT/rejected) still works but at a real penalty, everything
+// else banks 1:1. Also reseeds the resistance wall and clears heat so a rug
+// reads as an actual fresh start, matching the "fresh fake coin/run" feel.
+// Deliberately does not touch the bonding curve, liquidity, upgrades, combo,
+// or Lost Bag — this is a risk/reward layer on top of the existing economy,
+// not a replacement for it.
+function rugIt(state: GameState, now: number): GameState {
+  if (state.runBag <= 0) {
+    return stampRugEvent(state, 'none', 'NOTHING TO RUG', 'Build the bag first.')
+  }
+
+  const windowActive = now < state.rugWindowUntil
+  const dangerous = !windowActive && isDangerousHeat(state)
+  const rate = windowActive ? RUG_WINDOW_BANK_RATE : dangerous ? RUG_PANIC_BANK_RATE : RUG_NORMAL_BANK_RATE
+  const banked = Math.max(1, Math.round(state.runBag * rate))
+  const kind: RugEventKind = windowActive ? 'bonus' : dangerous ? 'panic' : 'banked'
+  const title = windowActive
+    ? pickLine(RUG_WINDOW_LINES, now)
+    : dangerous
+      ? pickLine(RUG_PANIC_LINES, now)
+      : pickLine(RUG_CLEAN_LINES, now)
+
+  let next: GameState = {
+    ...state,
+    rentMoney: state.rentMoney + banked,
+    runBag: 0,
+    runDepth: 0,
+    rugWindowUntil: 0,
+    resources: { ...state.resources, heat: 0 },
+    chart: { ...state.chart, heat: 0 },
+    resistance: createInitialResistance(state.chart.price),
+  }
+
+  next = stampRugEvent(next, kind, title, `+${banked} Rent`)
+  return addTicker(next, `${title} — +${banked} Rent Money banked.`)
+}
+
 function graduateCoin(state: GameState): GameState {
   if (!state.currentCoin.launched || state.bondingCurveProgress < 100) {
     return state
@@ -1254,6 +1393,14 @@ function graduateCoin(state: GameState): GameState {
     event: carriedEvent,
     prestigeCount: state.prestigeCount + 1,
     rugPrestige: state.rugPrestige + reward.rugPrestige,
+    // v0.5A: RENT MONEY is the permanent banked currency — it survives a
+    // graduation the same way Exit Liquidity/Receipts do. A still-unbanked
+    // Lost Bag also carries forward (it's recoverable "on the next run",
+    // and a graduation IS the next run) so the Soulslike stakes don't evaporate
+    // on a prestige. runBag/runDepth/rugWindowUntil reset via createInitialGame().
+    rentMoney: state.rentMoney,
+    lostBag: state.lostBag,
+    lostBagDepth: state.lostBagDepth,
     tickerHistory: [
       `${outcome} +${reward.exitLiquidity} Exit Liquidity, +${reward.receipts} Receipts.`,
       ...state.tickerHistory,
@@ -1528,6 +1675,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return state.newCardCount === 0 ? state : { ...state, newCardCount: 0 }
     case 'RESET_SAVE':
       return createInitialGame()
+    case 'RUG_IT':
+      return rugIt(state, action.now)
     default:
       return state
   }

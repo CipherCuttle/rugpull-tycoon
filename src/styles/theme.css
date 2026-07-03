@@ -927,6 +927,189 @@ h2 {
   text-shadow: 0 0 8px rgba(255, 194, 58, 0.4);
 }
 
+/* --- v0.5A Bag + Rug It + Lost Bag --- */
+
+.bag-panel {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--panel-2), var(--panel));
+}
+
+.bag-stats {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 6px;
+}
+
+.bag-pill {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.bag-pill span {
+  display: block;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.bag-pill strong {
+  display: block;
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace;
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bag-pill.bag strong {
+  color: var(--amber);
+  text-shadow: 0 0 10px rgba(255, 194, 58, 0.35);
+}
+
+.bag-pill.rent strong {
+  color: var(--acid);
+  text-shadow: 0 0 10px rgba(70, 255, 155, 0.35);
+}
+
+.bag-pill.lost {
+  border-color: rgba(255, 59, 82, 0.42);
+  background: rgba(255, 59, 82, 0.06);
+  animation: heat-pill-pulse 1400ms ease-in-out infinite;
+}
+
+.bag-pill.lost strong {
+  color: var(--red-2);
+}
+
+.rug-it-button {
+  position: relative;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  gap: 1px;
+  min-width: 84px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  background: linear-gradient(180deg, var(--panel-3), var(--panel-2));
+  color: var(--muted);
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  transition: transform 90ms ease, box-shadow 90ms ease;
+}
+
+.rug-it-button span {
+  font-size: 0.8rem;
+}
+
+.rug-it-button small {
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--faint);
+  font-size: 0.5rem;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rug-it-button:active {
+  transform: translateY(2px);
+}
+
+.rug-it-button.quiet {
+  opacity: 0.55;
+}
+
+.rug-it-button.normal {
+  border-color: rgba(255, 194, 58, 0.4);
+  background: linear-gradient(180deg, rgba(255, 194, 58, 0.16), var(--panel-2));
+  color: var(--amber);
+}
+
+.rug-it-button.normal small {
+  color: rgba(255, 194, 58, 0.75);
+}
+
+.rug-it-button.urgent {
+  border-color: var(--acid);
+  background: linear-gradient(180deg, rgba(70, 255, 155, 0.3), var(--panel-2));
+  color: var(--acid);
+  box-shadow: 0 0 0 2px rgba(70, 255, 155, 0.4), 0 0 22px rgba(70, 255, 155, 0.5);
+  animation: button-anxious 300ms ease-in-out infinite;
+}
+
+.rug-it-button.urgent small {
+  color: rgba(70, 255, 155, 0.85);
+}
+
+.rug-it-button.panic {
+  border-color: var(--red);
+  background: linear-gradient(180deg, rgba(255, 59, 82, 0.26), var(--panel-2));
+  color: #fff2f2;
+  animation: button-panic 320ms ease-in-out infinite;
+}
+
+.rug-it-button.panic small {
+  color: rgba(255, 240, 240, 0.85);
+}
+
+.rug-event-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  z-index: 6;
+  max-width: min(92%, 320px);
+  margin-bottom: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: rgba(4, 6, 10, 0.92);
+  color: var(--ink);
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-transform: uppercase;
+  transform: translateX(-50%);
+  pointer-events: none;
+  box-shadow: var(--shadow);
+  animation: float-up-micro 2200ms ease-out forwards;
+}
+
+.rug-event-lost {
+  border-color: rgba(255, 59, 82, 0.55);
+  color: var(--red-2);
+}
+
+.rug-event-recovered,
+.rug-event-bonus {
+  border-color: rgba(70, 255, 155, 0.5);
+  color: var(--acid);
+}
+
 /* --- Objective line --- */
 
 .objective-line {

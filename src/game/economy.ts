@@ -1,6 +1,6 @@
 import { CARDS } from '../data/cards'
 import { getUpgrade, UPGRADES } from '../data/upgrades'
-import { CHART_TAP_IMPULSE_BASE } from './chart'
+import { CHART_TAP_IMPULSE_BASE, OVERHEAT } from './chart'
 import type { GameState, ResistancePhase, TapRating } from './types'
 
 // v0.3.1 Economy Tuning: the amount of *curve-driving* Liquidity needed to fill
@@ -511,4 +511,44 @@ export const RESISTANCE_APPROACH_GRAVITY_SCALE = 0.82
 
 export function getResistancePhaseGravityScale(phase: ResistancePhase): number {
   return phase === 'approaching' || phase === 'smash' ? RESISTANCE_APPROACH_GRAVITY_SCALE : 1
+}
+
+// --- v0.5A Bag + Rug It + Lost Bag ---
+// A satirical press-your-luck layer on top of the existing Resistance loop:
+// clean crack hits/shatters fill an unbanked `runBag`; RUG_IT converts it into
+// permanent `rentMoney` at a rate that depends on timing (a post-shatter rug
+// window pays a bonus, panic-rugging while dangerously hot pays a penalty). A
+// severe failure sweeps the bag into a recoverable `lostBag` instead of wiping
+// it outright. Fictional arcade satire only — no real crypto/wallets/trading.
+export const BAG_CLEAN_CRACK_REWARD = 12
+export const BAG_PERFECT_CRACK_REWARD = 24
+export const BAG_SHATTER_JACKPOT = 90
+export const BAG_OVERDRIVE_MULTIPLIER = 1.5
+
+// How long a shatter keeps the rug window open (see reducer.ts) and the bank
+// rate multiplier while it's open — the "cash out on the high" reward for
+// finishing a wall instead of immediately hunting the next one.
+export const RUG_WINDOW_MS = 2500
+export const RUG_WINDOW_BANK_RATE = 1.35
+export const RUG_NORMAL_BANK_RATE = 1
+// Rugging while the chart is already dangerously hot (mid TOO HOT/rejected)
+// still lets the player bail, just at a real cost — a panicked exit, not a
+// clean one.
+export const RUG_PANIC_BANK_RATE = 0.5
+
+// A tap that lands the 'overheated' outcome only sweeps the bag once heat is
+// genuinely severe (HEAT_MAX is 130) — ordinary overheat scolds stay
+// recoverable, matching the "not every tiny miss loses the bag" requirement.
+export const MAJOR_FAILURE_HEAT_THRESHOLD = 100
+
+export function getBagCrackReward(perfect: boolean, shattered: boolean, isOverdrive: boolean): number {
+  const base = (perfect ? BAG_PERFECT_CRACK_REWARD : BAG_CLEAN_CRACK_REWARD) + (shattered ? BAG_SHATTER_JACKPOT : 0)
+  return Math.round(base * (isOverdrive ? BAG_OVERDRIVE_MULTIPLIER : 1))
+}
+
+// "Dangerous" heat gates the RUG_IT panic rate and the RugPanel's warning
+// styling — the chart is already cooking (or the wall just punished a tap),
+// so cashing out now is a real gamble, not a free action.
+export function isDangerousHeat(state: GameState): boolean {
+  return state.chart.heat > OVERHEAT || state.resistance.phase === 'overheated' || state.resistance.phase === 'rejected'
 }

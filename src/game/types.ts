@@ -228,6 +228,22 @@ export interface BonusTarget {
   expiresAt: number
 }
 
+// v0.5A Bag + Rug It + Lost Bag: a satirical press-your-luck layer on top of the
+// existing economy. `runBag` is unbanked run currency built from clean crack
+// hits/shatters; RUG_IT converts it into permanent `rentMoney`. A major failure
+// (severe overheat, or a rejection/miss while already dangerously hot) sweeps
+// the bag into `lostBag`, recoverable by climbing `runDepth` back up to
+// `lostBagDepth` (Soulslike bloodstain-style). Fictional arcade satire only —
+// no real crypto, wallets, or trading.
+export type RugEventKind = 'banked' | 'bonus' | 'panic' | 'none' | 'lost' | 'recovered'
+
+export interface RugEvent {
+  id: number
+  kind: RugEventKind
+  title: string
+  line: string
+}
+
 export interface GameState {
   saveVersion: number
   resources: ResourceState
@@ -311,6 +327,14 @@ export interface GameState {
   effectSeq: number
   lastOutcome?: string
   lastSavedAt?: number
+  // v0.5A Bag + Rug It + Lost Bag (see RugEvent above).
+  runBag: number
+  rentMoney: number
+  lostBag: number
+  lostBagDepth: number | null
+  runDepth: number
+  rugWindowUntil: number
+  lastRugEvent: RugEvent | null
 }
 
 export type GameAction =
@@ -323,3 +347,4 @@ export type GameAction =
   | { type: 'COMPLETE_ONBOARDING' }
   | { type: 'ACK_CARDS' }
   | { type: 'RESET_SAVE' }
+  | { type: 'RUG_IT'; now: number }

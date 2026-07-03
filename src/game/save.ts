@@ -123,6 +123,16 @@ function migrateGameState(value: GameState): GameState {
     toast: raw.toast ?? null,
     newCardCount: raw.newCardCount ?? 0,
     streakEffect: raw.streakEffect ?? null,
+    // v0.5A Bag + Rug It + Lost Bag. Additive: an old save simply starts with
+    // an empty bag/no rent banked yet and no pending recovery — nothing to
+    // migrate, the next crack hit/RUG_IT fills these in normally.
+    runBag: raw.runBag ?? 0,
+    rentMoney: raw.rentMoney ?? 0,
+    lostBag: raw.lostBag ?? 0,
+    lostBagDepth: raw.lostBagDepth ?? null,
+    runDepth: raw.runDepth ?? 0,
+    rugWindowUntil: raw.rugWindowUntil ?? 0,
+    lastRugEvent: raw.lastRugEvent ?? null,
   }
 }
 
