@@ -1,4 +1,4 @@
-import { createInitialChart, createInitialResistance } from './chart'
+import { createInitialChart, createInitialResistance, RESISTANCE_MAX_CRACK_PIPS } from './chart'
 import { getBondingCurveTier } from './economy'
 import type { GameState, ResistanceState } from './types'
 import { SAVE_VERSION } from './types'
@@ -56,6 +56,11 @@ function migrateGameState(value: GameState): GameState {
         breakoutStreak: raw.resistance.breakoutStreak ?? 0,
         perfectBreakouts: raw.resistance.perfectBreakouts ?? 0,
         rejections: raw.resistance.rejections ?? 0,
+        crackPips:
+          typeof raw.resistance.crackPips === 'number'
+            ? Math.max(0, Math.min(RESISTANCE_MAX_CRACK_PIPS, raw.resistance.crackPips))
+            : RESISTANCE_MAX_CRACK_PIPS,
+        focusStartedAt: 0,
       }
     : createInitialResistance(chart.price)
 

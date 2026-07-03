@@ -382,6 +382,20 @@ h2 {
   padding: 10px 12px 0;
 }
 
+.chart-header-left {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.chart-header-left .resistance-cue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .chart-header span {
   color: var(--acid-2);
   font-size: 0.68rem;
@@ -443,6 +457,46 @@ h2 {
   color: #fff;
   text-shadow: 0 0 10px #fff, 0 0 22px rgba(255, 194, 58, 1), 0 0 40px rgba(255, 60, 10, 0.9);
   animation: combo-overdrive-pulse 420ms ease-in-out infinite;
+}
+
+.chart-header .combo-badge.shatter {
+  color: #fff;
+  text-shadow: 0 0 10px #fff, 0 0 22px rgba(255, 194, 58, 1), 0 0 36px rgba(70, 255, 155, 0.8);
+  animation: combo-shatter-pulse 520ms ease-out infinite;
+}
+
+.crack-pips {
+  display: inline-flex !important;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  min-width: 43px;
+}
+
+.crack-pip {
+  display: block;
+  width: 12px;
+  height: 7px;
+  border: 1px solid rgba(255, 194, 58, 0.8);
+  border-radius: 2px;
+  background: linear-gradient(180deg, #fff3a4, var(--amber));
+  box-shadow: 0 0 7px rgba(255, 194, 58, 0.58);
+}
+
+.crack-pip.cracked {
+  border-color: rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(135deg, transparent 43%, rgba(255, 255, 255, 0.45) 44% 55%, transparent 56%),
+    rgba(255, 255, 255, 0.08);
+  box-shadow: none;
+  opacity: 0.72;
+}
+
+.crack-pips.shattered .crack-pip {
+  border-color: rgba(255, 255, 255, 0.9);
+  background: #fff;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.85), 0 0 18px rgba(255, 194, 58, 0.7);
+  animation: pip-shatter-flash 520ms ease-out infinite;
 }
 
 .chart-header strong.chart-down {
@@ -672,6 +726,14 @@ h2 {
   color: rgba(4, 20, 10, 0.78);
 }
 
+.main-action.focus-ready:not(.graduate-ready):not(.overdrive) {
+  box-shadow:
+    0 9px 0 #146a2f,
+    0 0 0 2px rgba(255, 255, 255, 0.78),
+    0 18px 48px rgba(255, 194, 58, 0.46),
+    inset 0 0 18px rgba(255, 255, 255, 0.22);
+}
+
 .main-action.broken {
   color: #04140a;
   background:
@@ -680,6 +742,22 @@ h2 {
   box-shadow:
     0 9px 0 #146a2f,
     0 18px 46px rgba(70, 255, 155, 0.42);
+}
+
+.main-action.shattered {
+  color: #120b02;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.45), transparent 55%),
+    linear-gradient(135deg, #fff, var(--amber) 45%, var(--acid));
+  box-shadow:
+    0 9px 0 #7a5314,
+    0 0 0 3px rgba(255, 255, 255, 0.75),
+    0 22px 58px rgba(255, 194, 58, 0.5);
+  animation: shatter-reward-pulse 520ms ease-out infinite;
+}
+
+.main-action.shattered small {
+  color: rgba(18, 11, 2, 0.8);
 }
 
 .main-action.breakout-rejected {
@@ -804,6 +882,45 @@ h2 {
   font-weight: 900;
 }
 
+.timing-chip {
+  width: fit-content;
+  max-width: 100%;
+  margin: 7px auto 0;
+  padding: 4px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(4, 6, 10, 0.7);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 1000;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-align: center;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.timing-perfect,
+.timing-clean {
+  border-color: rgba(70, 255, 155, 0.42);
+  color: var(--acid);
+  text-shadow: 0 0 8px rgba(70, 255, 155, 0.45);
+}
+
+.timing-too-hot,
+.timing-late,
+.timing-fizzle,
+.timing-panic-tap {
+  border-color: rgba(255, 59, 82, 0.38);
+  color: var(--red-2);
+  text-shadow: 0 0 8px rgba(255, 59, 82, 0.4);
+}
+
+.timing-early {
+  border-color: rgba(255, 194, 58, 0.38);
+  color: var(--amber);
+  text-shadow: 0 0 8px rgba(255, 194, 58, 0.4);
+}
 
 /* --- Objective line --- */
 
@@ -1528,8 +1645,20 @@ h2 {
   filter: drop-shadow(0 0 8px rgba(255, 194, 58, 0.95));
 }
 
-.chart-resistance-target.resistance-broken .chart-resistance-line {
+.chart-resistance-target.resistance-broken .chart-resistance-line,
+.chart-resistance-target.resistance-shattered .chart-resistance-line {
   animation: resistance-line-shatter 500ms ease-out forwards;
+}
+
+.chart-resistance-target.resistance-shattered .chart-resistance-line.core {
+  stroke: #fff;
+  stroke-dasharray: 2 5;
+  filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 18px rgba(255, 194, 58, 0.75));
+}
+
+.chart-resistance-target.resistance-shattered .chart-resistance-line.halo {
+  stroke: rgba(255, 255, 255, 0.42);
+  filter: drop-shadow(0 0 14px rgba(255, 194, 58, 0.8));
 }
 
 .chart-resistance-target.resistance-rejected .chart-resistance-line.core,
@@ -1551,6 +1680,13 @@ h2 {
   transform-box: fill-box;
   transform-origin: center;
   animation: resistance-burst 500ms ease-out forwards;
+}
+
+.chart-resistance-burst.shatter {
+  stroke: var(--amber);
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 12px rgba(255, 194, 58, 0.9));
+  animation: resistance-burst-shatter 900ms ease-out forwards;
 }
 
 /* v0.4A: the header's primary teaching cue — short action words per phase. This
@@ -1579,6 +1715,11 @@ h2 {
 .resistance-cue.resistance-broken {
   color: var(--acid);
   text-shadow: 0 0 12px rgba(70, 255, 155, 0.75);
+}
+
+.resistance-cue.resistance-shattered {
+  color: #fff;
+  text-shadow: 0 0 12px rgba(255, 255, 255, 0.85), 0 0 20px rgba(255, 194, 58, 0.75);
 }
 
 .resistance-cue.resistance-rejected,
@@ -1639,6 +1780,16 @@ h2 {
 .hero-chart.breakout-perfect {
   border-color: rgba(255, 194, 58, 0.92);
   box-shadow: var(--shadow), 0 0 40px rgba(255, 194, 58, 0.36), inset 0 0 28px rgba(70, 255, 155, 0.12);
+}
+
+.hero-chart.shattered {
+  border-color: rgba(255, 255, 255, 0.92);
+  box-shadow: var(--shadow), 0 0 42px rgba(255, 194, 58, 0.42), inset 0 0 30px rgba(255, 255, 255, 0.12);
+  animation: shatter-chart-flash 900ms ease-out infinite;
+}
+
+.hero-chart.shattered .fake-chart {
+  animation: breakout-flash 220ms ease-out;
 }
 
 .hero-chart.resistance-rejected {
@@ -1817,6 +1968,12 @@ h2 {
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.9), 0 0 32px rgba(255, 194, 58, 0.7);
 }
 
+.fountain-shatter {
+  color: #fff;
+  font-size: 1.55rem;
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.95), 0 0 30px rgba(255, 194, 58, 0.9), 0 3px 14px rgba(0, 0, 0, 0.95);
+}
+
 /* v0.4A: breakout success owns the loud amber lane; rejection is a sharp red. */
 .fountain-breakout {
   color: #fff;
@@ -1913,6 +2070,17 @@ h2 {
    nudge (see reducer.ts resolveResistanceTap) reads as a visible reaction. */
 .supercharge-rail.breakout-pulse {
   animation: supercharge-breakout-pulse 480ms ease-out;
+}
+
+.supercharge-rail.shatter-reward {
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 20px rgba(255, 194, 58, 0.34);
+  animation: shatter-reward-pulse 520ms ease-out infinite;
+}
+
+.supercharge-rail.shatter-reward .supercharge-label.breakout {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.78), 0 0 18px rgba(255, 194, 58, 0.82);
 }
 
 /* v0.4C Overdrive Quality Gate: the meter can be full (.full) but still can't
@@ -2195,6 +2363,48 @@ h2 {
   }
 }
 
+@keyframes combo-shatter-pulse {
+  0%,
+  100% {
+    text-shadow: 0 0 10px #fff, 0 0 22px rgba(255, 194, 58, 0.95), 0 0 36px rgba(70, 255, 155, 0.8);
+    transform: scale(1);
+  }
+  50% {
+    text-shadow: 0 0 16px #fff, 0 0 32px rgba(255, 194, 58, 1), 0 0 48px rgba(70, 255, 155, 0.95);
+    transform: scale(1.08);
+  }
+}
+
+@keyframes pip-shatter-flash {
+  0%,
+  100% {
+    opacity: 0.82;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes shatter-reward-pulse {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.18);
+  }
+}
+
+@keyframes shatter-chart-flash {
+  0%,
+  100% {
+    filter: brightness(1);
+  }
+  50% {
+    filter: brightness(1.12);
+  }
+}
+
 @keyframes button-pulse {
   0% {
     transform: scale(1);
@@ -2427,6 +2637,19 @@ h2 {
     opacity: 0;
     stroke-width: 0.5;
     transform: scale(4.5);
+  }
+}
+
+@keyframes resistance-burst-shatter {
+  0% {
+    opacity: 1;
+    stroke-width: 4;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    stroke-width: 0.5;
+    transform: scale(6.2);
   }
 }
 
@@ -2724,13 +2947,18 @@ h2 {
   .chart-active-tip.ready circle:first-child,
   .hero-chart.breakout-perfect .fake-chart,
   .hero-chart.breakout .fake-chart,
+  .hero-chart.shattered,
+  .hero-chart.shattered .fake-chart,
   .hero-chart.resistance-rejected .fake-chart,
   .resistance-cue.resistance-smash,
   .chart-resistance-target.resistance-approaching .chart-resistance-line.core,
   .chart-resistance-target.resistance-broken .chart-resistance-line,
+  .chart-resistance-target.resistance-shattered .chart-resistance-line,
   .chart-resistance-burst,
+  .chart-resistance-burst.shatter,
   .main-action.breakout-ready,
   .main-action.breakout-rejected,
+  .main-action.shattered,
   .main-action::after,
   .ticker-symbol::before,
   .streak-burst,
@@ -2739,6 +2967,7 @@ h2 {
   .supercharge-rail.full .supercharge-fill,
   .supercharge-rail.breakout-pulse,
   .supercharge-rail.charge-loss,
+  .supercharge-rail.shatter-reward,
   .resource-pill.heat.hot,
   .tap-float-breakout,
   .main-action.overdrive,
@@ -2747,7 +2976,9 @@ h2 {
   .game-shell.overdrive-shell::before,
   .combo-badge.tier-3,
   .combo-badge.tier-4,
-  .combo-badge.overdrive {
+  .combo-badge.overdrive,
+  .combo-badge.shatter,
+  .crack-pips.shattered .crack-pip {
     animation: none;
   }
 

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  getResistanceFocusMs,
+  isResistanceFocusReady,
+  RESISTANCE_FOCUS_BAND,
+  RESISTANCE_FOCUS_START_MS,
+} from '../game/chart'
+import {
   BREAKOUT_QUALITY_ARM_THRESHOLD,
   getComboCritBonus,
   getIsNearTierFloor,
@@ -49,16 +55,17 @@ const BREAKOUT_REWARD_TEXT_MS = 1500
 // v0.4C: how long a rejected/overheated tap's "why didn't that charge" note holds
 // the rail before it falls back to the live Supercharge/quality-gate readout.
 const SUPERCHARGE_NOTE_TEXT_MS = 1400
+const TIMING_LABEL_TEXT_MS = 950
 
 export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: MainActionButtonProps) {
   const [pulsing, setPulsing] = useState(false)
   const [recovering, setRecovering] = useState(false)
   const [superchargePulse, setSuperchargePulse] = useState(false)
-  const [breakoutReward, setBreakoutReward] = useState<{ chain: number; superchargeGain: number; curvePercent: number } | null>(
-    null,
-  )
+  const [breakoutReward, setBreakoutReward] = useState<NonNullable<GameState['lastTapEffect']>['breakoutReward'] | null>(null)
   const [superchargeNote, setSuperchargeNote] = useState<{ text: string; kind: 'loss' | 'blocked' } | null>(null)
+  const [timingLabel, setTimingLabel] = useState<string | null>(null)
   const lastTapId = useRef<number | null>(null)
+  const lastTimingId = useRef<number | null>(null)
   const wasDecaying = useRef(false)
 
   useEffect(() => {
@@ -116,6 +123,25 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
     return () => window.clearTimeout(noteTimeout)
   }, [state.lastTapEffect])
 
+  useEffect(() => {
+    const effect = state.lastTapEffect
+
+    if (!effect || effect.id === lastTimingId.current) {
+      return
+    }
+
+    lastTimingId.current = effect.id
+    setTimingLabel(effect.timingLabel ?? null)
+
+    if (!effect.timingLabel) {
+      return
+    }
+
+    const timeout = window.setTimeout(() => setTimingLabel(null), TIMING_LABEL_TEXT_MS)
+
+    return () => window.clearTimeout(timeout)
+  }, [state.lastTapEffect])
+
   // v0.3: brief green "recovering" flash the moment an active decay is broken.
   useEffect(() => {
     if (wasDecaying.current && !state.isDecaying) {
@@ -148,10 +174,11 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
 
   // v0.3.5 Supercharge / Overdrive. overdriveUntil is an ms epoch; the ~120ms
   // game tick re-renders us, so the countdown ticks down smoothly.
-  const overdrive = launched && !graduateReady && state.overdriveUntil > Date.now()
+  const nowMs = Date.now()
+  const overdrive = launched && !graduateReady && state.overdriveUntil > nowMs
   const supercharged = launched && !graduateReady && !overdrive && state.supercharge >= 100
   const superchargePct = Math.min(100, Math.round(state.supercharge))
-  const overdriveRemaining = overdrive ? Math.max(0, state.overdriveUntil - Date.now()) : 0
+  const overdriveRemaining = overdrive ? Math.max(0, state.overdriveUntil - nowMs) : 0
   const overdriveSeconds = Math.ceil(overdriveRemaining / 1000)
   const overdrivePct = Math.min(100, (overdriveRemaining / OVERDRIVE_DURATION_MS) * 100)
 
@@ -180,8 +207,11 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   // and the Chart-Gravity decay warnings layered on top), so it always tells the
   // player what to do, when to tap, and what just happened. Kept short for mobile.
   const phase = state.resistance.phase
-  const breakoutStreak = state.resistance.breakoutStreak
   const resistancePhase = launched && !graduateReady && !overdrive ? phase : null
+  const focusMs = launched && !graduateReady && !overdrive ? getResistanceFocusMs(state.resistance, nowMs) : 0
+  const focusReady = launched && !graduateReady && !overdrive && isResistanceFocusReady(state.resistance, nowMs)
+  const focusBuilding = focusMs >= RESISTANCE_FOCUS_START_MS && !focusReady
+  const focusNear = phase === 'approaching' && state.resistance.price - state.chart.price <= RESISTANCE_FOCUS_BAND
 
   let label: string
   let detail: string
@@ -196,10 +226,16 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
     detail = 'MASH WITHOUT CONSEQUENCES'
   } else if (phase === 'smash') {
     label = 'SMASH RESISTANCE'
-    detail = 'TAP NOW FOR BREAKOUT'
+    detail = focusReady ? 'NOW' : 'TAP NOW FOR BREAKOUT'
   } else if (phase === 'broken') {
-    label = `BREAKOUT CHAIN ×${breakoutStreak}`
-    detail = 'NEXT RESISTANCE INCOMING'
+    label = 'WALL CRACKED'
+    detail =
+      state.resistance.crackPips === 1
+        ? 'ONE CLEAN HIT TO SHATTER'
+        : `${state.resistance.crackPips} PIPS LEFT`
+  } else if (phase === 'shattered') {
+    label = 'WALL SHATTERED'
+    detail = 'JACKPOT'
   } else if (phase === 'rejected') {
     label = 'REJECTED'
     detail = 'RECOVER THE CHART'
@@ -216,8 +252,8 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
     label = 'SEND THE CANDLE'
     detail = CHAIN_BREAKING_LINES[state.taps % CHAIN_BREAKING_LINES.length]
   } else if (phase === 'approaching') {
-    label = 'SEND THE CANDLE'
-    detail = 'GET READY — SMASH INCOMING'
+    label = focusNear ? (focusReady ? 'PERFECT READY' : focusBuilding ? 'FOCUSING' : 'HOLD YOUR NERVE') : 'SEND THE CANDLE'
+    detail = focusNear ? (focusReady ? 'STRIKE ON SMASH' : focusBuilding ? 'WAIT FOR THE BREAK' : 'DO NOT PANIC TAP') : 'GET READY — LINE UP THE WALL'
   } else {
     label = 'SEND THE CANDLE'
     detail = 'BUILD MOMENTUM TO RESISTANCE'
@@ -256,6 +292,8 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
         } ${chainAtRisk ? 'chain-risk' : ''} ${chainClass} ${supercharged ? 'supercharged' : ''} ${
           overdrive ? 'overdrive' : ''
         } ${resistancePhase === 'smash' ? 'breakout-ready' : ''} ${resistancePhase === 'broken' ? 'broken' : ''} ${
+          resistancePhase === 'shattered' ? 'shattered' : ''
+        } ${focusReady ? 'focus-ready' : ''} ${
           resistancePhase === 'rejected' || resistancePhase === 'overheated' ? 'breakout-rejected' : ''
         }`}
         type="button"
@@ -286,7 +324,9 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
         <div
           className={`supercharge-rail ${supercharged ? 'full' : ''} ${overdrive ? 'overdrive' : ''} ${
             superchargePulse ? 'breakout-pulse' : ''
-          } ${supercharged && !qualityReady ? 'blocked' : ''} ${superchargeNote ? `charge-${superchargeNote.kind}` : ''}`}
+          } ${breakoutReward?.shattered ? 'shatter-reward' : ''} ${supercharged && !qualityReady ? 'blocked' : ''} ${
+            superchargeNote ? `charge-${superchargeNote.kind}` : ''
+          }`}
           aria-label={overdrive ? 'Overdrive countdown' : 'Supercharge meter'}
         >
           {overdrive ? (
@@ -300,7 +340,8 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
           ) : breakoutReward ? (
             <>
               <span className="supercharge-label breakout">
-                BREAKOUT +{breakoutReward.superchargeGain}⚡ · +{breakoutReward.curvePercent.toFixed(2)}% CURVE
+                {breakoutReward.shattered ? 'SHATTERED' : breakoutReward.focusPerfect ? 'FOCUS PERFECT' : 'BREAKOUT'} +
+                {breakoutReward.superchargeGain}⚡ · +{breakoutReward.curvePercent.toFixed(2)}% CURVE
               </span>
               <div className="supercharge-track">
                 <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />
@@ -326,6 +367,8 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
           )}
         </div>
       ) : null}
+
+      {timingLabel ? <div className={`timing-chip timing-${timingLabel.toLowerCase().replace(/\s+/g, '-')}`}>{timingLabel}</div> : null}
 
       {effect ? (
         <div className={`tap-float ${crit ? 'crit' : ''}`} key={effect.id}>

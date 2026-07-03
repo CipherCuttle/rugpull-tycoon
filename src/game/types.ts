@@ -92,7 +92,7 @@ export type TapRating = 'perfect' | 'good' | 'weak' | 'rejected' | 'overheated'
 // overlay. `waiting`/`approaching`/`smash` are derived from the live chart price;
 // `broken`/`rejected`/`overheated` are short-lived event beats (held until
 // `phaseUntil`) that a tap (or the anti-pin timer) stamps.
-export type ResistancePhase = 'waiting' | 'approaching' | 'smash' | 'broken' | 'rejected' | 'overheated'
+export type ResistancePhase = 'waiting' | 'approaching' | 'smash' | 'broken' | 'rejected' | 'overheated' | 'shattered'
 
 export interface ResistanceState {
   id: number
@@ -103,6 +103,11 @@ export interface ResistanceState {
   breakoutStreak: number
   perfectBreakouts: number
   rejections: number
+  // v0.4E: target-local wall health. Fresh targets start at 3; clean hits crack
+  // this target only, and a full shatter respawns the next target with fresh pips.
+  crackPips: number
+  // ms epoch used by the patience/focus beat. It is never restored from saves.
+  focusStartedAt: number
   // v0.4A clarity pass.
   phase: ResistancePhase
   // ms epoch a transient beat (broken/rejected/overheated) holds until, after
@@ -126,10 +131,18 @@ export interface TapEffect {
   ratingLabel?: string
   // v0.4B: set only on a breakout tap, so the button can show a compact,
   // concrete "what just happened" readout instead of just a combat-text burst.
-  breakoutReward?: { chain: number; superchargeGain: number; curvePercent: number } | null
+  breakoutReward?: {
+    chain: number
+    superchargeGain: number
+    curvePercent: number
+    shattered?: boolean
+    focusPerfect?: boolean
+  } | null
   // v0.4C: set on a rejected/overheated tap so the Supercharge rail can explain
   // *why* the meter didn't move (or dropped) instead of just sitting there.
   superchargeNote?: { text: string; kind: 'loss' | 'blocked' } | null
+  // v0.4E: compact timing chip rendered near the button/rail, not over the chart.
+  timingLabel?: string | null
 }
 
 export interface PurchaseEffect {
@@ -169,6 +182,7 @@ export type FountainKind =
   // v0.4A: breakout success / resistance rejection combat text.
   | 'breakout'
   | 'reject'
+  | 'shatter'
 
 export interface FountainEvent {
   id: number

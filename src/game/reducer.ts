@@ -74,14 +74,17 @@ import {
   classifyTapRating,
   createInitialChart,
   createInitialResistance,
+  isResistanceFocusReady,
   resolveBreakoutTap,
   CHART_HEAT_PER_TAP,
   CHART_TAP_STEP,
   OVERHEAT,
   RESISTANCE_BROKEN_HOLD_MS,
+  RESISTANCE_MAX_CRACK_PIPS,
   RESISTANCE_OVERHEAT_HOLD_MS,
   RESISTANCE_OVERHEAT_RECOVERY_SCALE,
   RESISTANCE_REJECTED_HOLD_MS,
+  RESISTANCE_SHATTER_HOLD_MS,
 } from './chart'
 import type { EventProgress, FountainKind, GameAction, GameState, ResourceState, TapRating, ToastKind } from './types'
 import { SAVE_VERSION } from './types'
@@ -201,9 +204,10 @@ function advanceChartState(
   dt: number,
   opts: Parameters<typeof advanceChart>[2] = {},
   now = 0,
+  resistanceOpts: Parameters<typeof advanceResistance>[4] = {},
 ): GameState {
   const chart = advanceChart(state.chart, dt, opts)
-  return { ...state, chart, resistance: advanceResistance(state.resistance, chart, dt, now) }
+  return { ...state, chart, resistance: advanceResistance(state.resistance, chart, dt, now, resistanceOpts) }
 }
 
 // Single non-blocking toast slot. Each stamp overwrites the previous one, so the
@@ -547,6 +551,8 @@ function launchCoin(state: GameState): GameState {
 // 2–4 min graduation pacing (verified via the headless sim).
 const BREAKOUT_CURVE_BONUS_PERFECT = 0.7
 const BREAKOUT_CURVE_BONUS_GOOD = 0.35
+const BREAKOUT_CURVE_BONUS_FOCUS = 0.22
+const SHATTER_CURVE_BONUS = 1.15
 // v0.4C Overdrive Quality Gate: this is now the PRIMARY Overdrive fuel (the tick
 // loop no longer builds Supercharge off raw combo — see updateStreakMeters), so
 // the perfect/good gap widened from v0.4B's 10/5 to make timing read as clearly
@@ -554,8 +560,12 @@ const BREAKOUT_CURVE_BONUS_GOOD = 0.35
 // capped to a 1.3× bump so a long chain alone can't out-fuel actual timing.
 const BREAKOUT_SUPERCHARGE_GAIN_PERFECT = 16
 const BREAKOUT_SUPERCHARGE_GAIN_GOOD = 8
+const BREAKOUT_SUPERCHARGE_GAIN_FOCUS = 5
+const SHATTER_SUPERCHARGE_GAIN = 24
+const SHATTER_IMPULSE = 12.5
+const PANIC_TAP_GAP_MS = 240
 
-type BreakoutReward = { chain: number; superchargeGain: number; curvePercent: number }
+type BreakoutReward = { chain: number; superchargeGain: number; curvePercent: number; shattered?: boolean; focusPerfect?: boolean }
 type SuperchargeNote = { text: string; kind: 'loss' | 'blocked' }
 
 // v0.4A Resistance Breakout. Read AFTER the tap's chart impulse has landed and
@@ -567,39 +577,77 @@ function resolveResistanceTap(
   now: number,
   walletGain: number,
   isOverdrive: boolean,
-): { next: GameState; rating: TapRating | null; breakoutReward: BreakoutReward | null; superchargeNote: SuperchargeNote | null } {
+  wasFocusReady: boolean,
+  wasSmash: boolean,
+  tapGapMs: number,
+): {
+  next: GameState
+  rating: TapRating | null
+  breakoutReward: BreakoutReward | null
+  superchargeNote: SuperchargeNote | null
+  timingLabel: string | null
+} {
   const overheated = state.chart.heat > OVERHEAT && !isOverdrive
   const outcome = resolveBreakoutTap(state.resistance, state.chart, now, overheated)
+  const rapidTap = !isOverdrive && tapGapMs <= PANIC_TAP_GAP_MS
+
+  if (rapidTap && (outcome === 'breakout-perfect' || outcome === 'breakout-good')) {
+    return {
+      next: { ...state, resistance: { ...state.resistance, focusStartedAt: 0 } },
+      rating: 'weak',
+      breakoutReward: null,
+      superchargeNote: null,
+      timingLabel: 'PANIC TAP',
+    }
+  }
 
   if (outcome === 'breakout-perfect' || outcome === 'breakout-good') {
-    const perfect = outcome === 'breakout-perfect'
+    const focusPerfect = !isOverdrive && wasFocusReady && wasSmash
+    const perfect = outcome === 'breakout-perfect' || focusPerfect
+    const pipDamage = perfect ? 2 : 1
+    const crackPips = Math.max(0, state.resistance.crackPips - pipDamage)
+    const shattered = crackPips === 0
     const streak = state.resistance.breakoutStreak + 1
     let next: GameState = {
       ...state,
       resistance: {
         ...state.resistance,
-        phase: 'broken',
-        phaseUntil: now + RESISTANCE_BROKEN_HOLD_MS,
+        phase: shattered ? 'shattered' : 'broken',
+        phaseUntil: now + (shattered ? RESISTANCE_SHATTER_HOLD_MS : RESISTANCE_BROKEN_HOLD_MS),
         windowUntil: 0,
         crossedAt: 0,
         breakoutStreak: streak,
         perfectBreakouts: state.resistance.perfectBreakouts + (perfect ? 1 : 0),
         lastResistanceHitAt: now,
         lastRating: perfect ? 'perfect' : 'good',
+        crackPips,
+        focusStartedAt: 0,
         aboveSinceMs: 0,
       },
     }
     // Breakout pop: a punchy upward impulse through where the line was. The target
     // is already frozen ('broken'), so this extra step won't reopen a window.
-    next = advanceChartState(next, CHART_TAP_STEP, { impulse: perfect ? 9 : 6.5, frictionScale: 0.7 }, now)
-    const bonusCurve = walletGain * (perfect ? BREAKOUT_CURVE_BONUS_PERFECT : BREAKOUT_CURVE_BONUS_GOOD)
+    const impulse = shattered ? SHATTER_IMPULSE : focusPerfect ? 10.5 : perfect ? 9 : 6.5
+    next = advanceChartState(next, CHART_TAP_STEP, { impulse, frictionScale: shattered ? 0.58 : 0.7 }, now)
+    const curveBonusScale =
+      (perfect ? BREAKOUT_CURVE_BONUS_PERFECT : BREAKOUT_CURVE_BONUS_GOOD) +
+      (focusPerfect ? BREAKOUT_CURVE_BONUS_FOCUS : 0) +
+      (shattered ? SHATTER_CURVE_BONUS : 0)
+    const bonusCurve = walletGain * curveBonusScale
     const curvePercent = getBondingCurveDelta(next, bonusCurve)
     next = awardLiquidity(next, 0, bonusCurve)
     const baseSuperchargeGain = perfect ? BREAKOUT_SUPERCHARGE_GAIN_PERFECT : BREAKOUT_SUPERCHARGE_GAIN_GOOD
-    const superchargeGain = Math.round(baseSuperchargeGain * getBreakoutComboScale(next.comboMultiplier))
+    const superchargeGain = Math.round(
+      (baseSuperchargeGain + (focusPerfect ? BREAKOUT_SUPERCHARGE_GAIN_FOCUS : 0)) * getBreakoutComboScale(next.comboMultiplier) +
+        (shattered ? SHATTER_SUPERCHARGE_GAIN : 0),
+    )
+    const qualityGain =
+      (perfect ? BREAKOUT_QUALITY_GAIN_PERFECT : BREAKOUT_QUALITY_GAIN_GOOD) +
+      (focusPerfect ? 4 : 0) +
+      (shattered ? BREAKOUT_QUALITY_GAIN_PERFECT : 0)
     const breakoutQualityScore = Math.min(
       BREAKOUT_QUALITY_MAX,
-      next.breakoutQualityScore + (perfect ? BREAKOUT_QUALITY_GAIN_PERFECT : BREAKOUT_QUALITY_GAIN_GOOD),
+      next.breakoutQualityScore + qualityGain,
     )
     next = { ...next, supercharge: Math.min(SUPERCHARGE_MAX, next.supercharge + superchargeGain), breakoutQualityScore }
     // v0.4D: the compact Supercharge-rail reward chip (breakoutReward, below)
@@ -607,14 +655,19 @@ function resolveResistanceTap(
     // pure duplication for the common case, and the chain streak now lives in the
     // persistent combo badge instead of a floating line. Only PERFECT still gets
     // its own fountain beat — it's rarer and earns the extra fanfare.
-    if (perfect) {
+    if (shattered) {
+      next = pushFountain(next, 'SHATTERED', 'shatter')
+    } else if (focusPerfect) {
+      next = pushFountain(next, 'FOCUS PERFECT', 'breakout')
+    } else if (perfect) {
       next = pushFountain(next, 'BREAKOUT PERFECT', 'breakout')
     }
     return {
       next,
       rating: perfect ? 'perfect' : 'good',
-      breakoutReward: { chain: streak, superchargeGain, curvePercent },
+      breakoutReward: { chain: streak, superchargeGain, curvePercent, shattered, focusPerfect },
       superchargeNote: null,
+      timingLabel: perfect ? 'PERFECT' : 'CLEAN',
     }
   }
 
@@ -637,14 +690,25 @@ function resolveResistanceTap(
         phaseUntil: now + RESISTANCE_OVERHEAT_HOLD_MS,
         windowUntil: 0,
         crossedAt: 0,
+        focusStartedAt: 0,
         lastRating: 'overheated',
       },
     }
     next = pushFountain(next, 'TOO HOT', 'reject')
-    return { next, rating: 'overheated', breakoutReward: null, superchargeNote: { text: 'TOO HOT — NO CHARGE', kind: 'blocked' } }
+    return {
+      next,
+      rating: 'overheated',
+      breakoutReward: null,
+      superchargeNote: { text: 'TOO HOT — NO CHARGE', kind: 'blocked' },
+      timingLabel: 'TOO HOT',
+    }
   }
 
   if (outcome === 'rejected') {
+    if (isOverdrive) {
+      return { next: state, rating: null, breakoutReward: null, superchargeNote: null, timingLabel: null }
+    }
+
     // Pushed above the line without a clean hit: a red rejection candle, a heat
     // spike, and chain damage — one miss stings but never ends the run.
     // v0.4C: also drains banked Supercharge and breakout-quality standing — a
@@ -665,20 +729,44 @@ function resolveResistanceTap(
         crossedAt: 0,
         breakoutStreak: 0,
         rejections: state.resistance.rejections + 1,
+        crackPips: Math.min(RESISTANCE_MAX_CRACK_PIPS, state.resistance.crackPips + 1),
+        focusStartedAt: 0,
         lastRating: 'rejected',
         aboveSinceMs: 0,
       },
     }
     next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: 14 }, now)
     next = pushFountain(next, 'REJECTED', 'reject')
-    return { next, rating: 'rejected', breakoutReward: null, superchargeNote: { text: 'REJECTED — CHARGE LOST', kind: 'loss' } }
+    return {
+      next,
+      rating: 'rejected',
+      breakoutReward: null,
+      superchargeNote: { text: 'REJECTED — CHARGE LOST', kind: 'loss' },
+      timingLabel: 'LATE',
+    }
   }
 
   // 'weak' (building momentum below the line) / 'none' (mid event beat): no penalty
   // and no combat text — the button already reads BUILD MOMENTUM here. v0.4C: a
   // tiny Supercharge trickle still applies (see sendCandle), just not enough to
   // matter on its own.
-  return { next: state, rating: outcome === 'weak' ? 'weak' : null, breakoutReward: null, superchargeNote: null }
+  const repeatedPunishmentTap = state.resistance.phase === 'overheated' || state.resistance.phase === 'rejected'
+  const timingLabel = isOverdrive
+    ? null
+    : repeatedPunishmentTap
+      ? 'FIZZLE'
+      : tapGapMs <= PANIC_TAP_GAP_MS
+        ? 'PANIC TAP'
+        : outcome === 'weak'
+          ? 'EARLY'
+          : null
+  return {
+    next: { ...state, resistance: { ...state.resistance, focusStartedAt: 0 } },
+    rating: outcome === 'weak' ? 'weak' : null,
+    breakoutReward: null,
+    superchargeNote: null,
+    timingLabel,
+  }
 }
 
 function sendCandle(state: GameState, now: number): GameState {
@@ -695,6 +783,7 @@ function sendCandle(state: GameState, now: number): GameState {
 
   // v0.3.2 Candle Chain: a tap inside the window continues the chain; otherwise
   // it starts a fresh one at 1. (lastTapAt === 0 means "first tap of the run".)
+  const tapGapMs = state.lastTapAt > 0 ? now - state.lastTapAt : Number.POSITIVE_INFINITY
   const withinWindow = state.lastTapAt > 0 && now - state.lastTapAt <= COMBO_WINDOW_MS
   const combo = withinWindow ? state.combo + 1 : 1
   const comboMultiplier = getComboMultiplier(combo)
@@ -720,6 +809,8 @@ function sendCandle(state: GameState, now: number): GameState {
   // stays consequence-free, per its existing contract.
   const preTapOverheated = state.chart.heat > OVERHEAT && !isOverdrive
   const tapRating = isOverdrive ? null : classifyTapRating(state.resistance, state.chart, now, preTapOverheated)
+  const wasFocusReady = !isOverdrive && isResistanceFocusReady(state.resistance, now)
+  const wasSmash = state.resistance.phase === 'smash'
   const rewardScale = getTapRatingRewardScale(tapRating)
   const heatRatingScale = getTapRatingHeatScale(tapRating)
   const impulseRatingScale = getTapRatingImpulseScale(tapRating)
@@ -747,6 +838,10 @@ function sendCandle(state: GameState, now: number): GameState {
     resources: {
       ...state.resources,
       heat: state.resources.heat + getHeatGain(state),
+    },
+    resistance: {
+      ...state.resistance,
+      focusStartedAt: 0,
     },
   }
 
@@ -778,7 +873,7 @@ function sendCandle(state: GameState, now: number): GameState {
 
   // v0.4A Resistance Breakout: classify the tap against the (post-impulse) line
   // and stamp the matching arcade beat — breakout pop, rejection dump, or scold.
-  const resistanceResult = resolveResistanceTap(next, now, walletGain, isOverdrive)
+  const resistanceResult = resolveResistanceTap(next, now, walletGain, isOverdrive, wasFocusReady, wasSmash, tapGapMs)
   next = resistanceResult.next
 
   // v0.4C: a tiny Supercharge trickle for an ordinary tap that never actually hit
@@ -825,6 +920,7 @@ function sendCandle(state: GameState, now: number): GameState {
       rating: resistanceResult.rating ?? undefined,
       breakoutReward: resistanceResult.breakoutReward,
       superchargeNote: resistanceResult.superchargeNote,
+      timingLabel: resistanceResult.timingLabel,
     },
   }
 
@@ -1011,6 +1107,11 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
       heatDecayScale: recoveringFromOverheat ? RESISTANCE_OVERHEAT_RECOVERY_SCALE : 1,
     },
     now,
+    {
+      focusCanBuild: true,
+      heatSafe: !overdriveActive && state.chart.heat <= OVERHEAT,
+      lastTapAt: state.lastTapAt,
+    },
   )
 
   // v0.4A anti-pin: advanceResistance force-rejects a chart that floated above the
@@ -1019,7 +1120,11 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
   // nick the chain so the target visibly cycles instead of parking at the top.
   let withChart = base
   const antiPinRejected =
-    base.resistance.phase === 'rejected' && prevPhase !== 'rejected' && prevPhase !== 'broken' && prevPhase !== 'overheated'
+    base.resistance.phase === 'rejected' &&
+    prevPhase !== 'rejected' &&
+    prevPhase !== 'broken' &&
+    prevPhase !== 'overheated' &&
+    prevPhase !== 'shattered'
   if (antiPinRejected) {
     const combo = Math.floor(base.combo / 2)
     withChart = advanceChartState(base, CHART_TAP_STEP, { jeetDump: 10 }, now)
