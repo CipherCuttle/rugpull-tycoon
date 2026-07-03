@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { classifyTapRating, OVERHEAT } from '../game/chart'
+import { classifyTapRating, getResistanceFocusMs, isResistanceFocusReady, OVERHEAT } from '../game/chart'
 import {
   BREAKOUT_QUALITY_ARM_THRESHOLD,
   getBondingCurveDelta,
@@ -46,6 +46,8 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
   const resistanceDistance = state.resistance.price - state.chart.price
   const windowMs = Math.max(0, state.resistance.windowUntil - now)
   const tapPreview = classifyTapRating(state.resistance, state.chart, now, state.chart.heat > OVERHEAT)
+  const focusMs = getResistanceFocusMs(state.resistance, now)
+  const focusReady = isResistanceFocusReady(state.resistance, now)
   // Estimated time to graduation assuming a steady 3 taps/sec of active play
   // (idle never decays while tapping, so decay is excluded from the active rate).
   // ETA now factors the Candle Chain: curve pressure = base × combo multiplier.
@@ -110,6 +112,10 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
           <div>
             phase: {state.resistance.phase} · last {state.resistance.lastRating ?? '—'} · preview {tapPreview}
           </div>
+          <div>
+            pips {state.resistance.crackPips} · focus {Math.round(focusMs)}ms {focusReady ? 'READY' : ''}
+          </div>
+          <div>timing label: {state.lastTapEffect?.timingLabel ?? '—'}</div>
           <div>
             streak {state.resistance.breakoutStreak} · perfect {state.resistance.perfectBreakouts} · rejected{' '}
             {state.resistance.rejections}

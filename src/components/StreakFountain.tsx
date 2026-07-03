@@ -39,9 +39,10 @@ const KIND_SOUND: Partial<Record<FountainKind, SoundKind>> = {
   milestone: 'streak',
   supercharge: 'supercharge',
   overdrive: 'overdrive',
+  shatter: 'streak',
 }
 
-const PROMINENT_KINDS = new Set<FountainKind>(['breakout', 'reject', 'milestone', 'overdrive', 'supercharge'])
+const PROMINENT_KINDS = new Set<FountainKind>(['breakout', 'reject', 'milestone', 'overdrive', 'supercharge', 'shatter'])
 
 // v0.4B: minimum gap (ms) between two particles of the same kind. Loud kinds
 // already self-space via their event-beat hold windows (see chart.ts /
@@ -55,6 +56,7 @@ const KIND_COOLDOWN_MS: Partial<Record<FountainKind, number>> = {
   milestone: 350,
   supercharge: 350,
   overdrive: 350,
+  shatter: 700,
 }
 
 // v0.4B: every lane lives in the chart's left ~40% column, which the resistance
@@ -65,6 +67,7 @@ const KIND_COOLDOWN_MS: Partial<Record<FountainKind, number>> = {
 const LANE_BY_KIND: Partial<Record<FountainKind, 'top' | 'mid' | 'bottom'>> = {
   breakout: 'top',
   milestone: 'top',
+  shatter: 'top',
   overdrive: 'top',
   supercharge: 'mid',
   crit: 'mid',

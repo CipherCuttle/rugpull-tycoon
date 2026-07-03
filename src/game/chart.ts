@@ -109,6 +109,11 @@ export const RESISTANCE_APPROACH_BAND = 20
 export const RESISTANCE_BROKEN_HOLD_MS = 620
 export const RESISTANCE_REJECTED_HOLD_MS = 760
 export const RESISTANCE_OVERHEAT_HOLD_MS = 560
+export const RESISTANCE_MAX_CRACK_PIPS = 3
+export const RESISTANCE_FOCUS_BAND = RESISTANCE_NEAR_BAND + 2
+export const RESISTANCE_FOCUS_START_MS = 300
+export const RESISTANCE_FOCUS_READY_MS = 650
+export const RESISTANCE_SHATTER_HOLD_MS = 900
 // Anti-pin: the chart sitting above the line this long without a clean break is
 // force-rejected, so it can never ride the line up into the ceiling. Shorter than
 // the slowest tap cadence would keep a line alive, so continuous play (which
@@ -123,6 +128,12 @@ export const RESISTANCE_FAR_BELOW = 34
 // than one who keeps mashing through it. Only applied by the idle TICK path, not
 // the tap path, so mashing through the window never benefits from it.
 export const RESISTANCE_OVERHEAT_RECOVERY_SCALE = 1.6
+
+interface ResistanceAdvanceOpts {
+  focusCanBuild?: boolean
+  heatSafe?: boolean
+  lastTapAt?: number
+}
 
 function roll(seed: number): number {
   const value = Math.sin(seed * 127.11) * 43758.5453
@@ -158,6 +169,8 @@ export function createInitialResistance(anchorPrice: number, id = 1): Resistance
     breakoutStreak: 0,
     perfectBreakouts: 0,
     rejections: 0,
+    crackPips: RESISTANCE_MAX_CRACK_PIPS,
+    focusStartedAt: 0,
     phase: anchorPrice >= price - RESISTANCE_APPROACH_BAND ? 'approaching' : 'waiting',
     phaseUntil: 0,
     aboveSinceMs: 0,
@@ -187,26 +200,60 @@ function derivePhase(distance: number, windowActive: boolean): ResistancePhase {
   return distance <= RESISTANCE_APPROACH_BAND ? 'approaching' : 'waiting'
 }
 
+export function getResistanceFocusMs(resistance: ResistanceState, now: number): number {
+  if (resistance.focusStartedAt <= 0 || now <= 0) {
+    return 0
+  }
+  return Math.max(0, now - resistance.focusStartedAt)
+}
+
+export function isResistanceFocusReady(resistance: ResistanceState, now: number): boolean {
+  return getResistanceFocusMs(resistance, now) >= RESISTANCE_FOCUS_READY_MS
+}
+
+function clearTransientBeat(resistance: ResistanceState): ResistanceState {
+  return {
+    ...resistance,
+    windowUntil: 0,
+    crossedAt: 0,
+    phaseUntil: 0,
+    aboveSinceMs: 0,
+    focusStartedAt: 0,
+  }
+}
+
 export function advanceResistance(
   resistance: ResistanceState,
   chart: ChartState,
   dt: number,
   now: number,
+  opts: ResistanceAdvanceOpts = {},
 ): ResistanceState {
+  let live = resistance
+
   // Transient event beat (broken / rejected / overheated): freeze the target in
-  // place so the shatter/rejection visuals sit still, then respawn once the beat
-  // is over.
-  if (resistance.phase === 'broken' || resistance.phase === 'rejected' || resistance.phase === 'overheated') {
-    if (now > 0 && now >= resistance.phaseUntil) {
-      return respawnResistance(resistance, chart)
+  // place so the crack/rejection visuals sit still. Only a full SHATTER spawns a
+  // new target; ordinary cracks keep working the same wall with its remaining pips.
+  if (
+    live.phase === 'broken' ||
+    live.phase === 'rejected' ||
+    live.phase === 'overheated' ||
+    live.phase === 'shattered'
+  ) {
+    if (now > 0 && now >= live.phaseUntil) {
+      if (live.phase === 'shattered') {
+        return respawnResistance(live, chart)
+      }
+      live = clearTransientBeat(live)
+    } else {
+      return live
     }
-    return resistance
   }
 
   // Chart crashed far below the line (e.g. a jeet dump): bring a nearer target
   // down rather than waiting on the slow drift.
-  if (now > 0 && chart.price < resistance.price - RESISTANCE_FAR_BELOW) {
-    return respawnResistance(resistance, chart)
+  if (now > 0 && chart.price < live.price - RESISTANCE_FAR_BELOW) {
+    return respawnResistance(live, chart)
   }
 
   // A live line drifts down toward a chart stalled below it so it stays reachable.
@@ -215,15 +262,15 @@ export function advanceResistance(
   // still creeping while the player is trying to hold station near it.
   const driftFloor = Math.min(80, Math.max(40, chart.price + 9))
   const driftedPrice =
-    chart.price < resistance.price - RESISTANCE_DRIFT_HOLD_BAND
-      ? Math.max(driftFloor, resistance.price - RESISTANCE_DRIFT_PER_SEC * dt)
-      : resistance.price
+    chart.price < live.price - RESISTANCE_DRIFT_HOLD_BAND
+      ? Math.max(driftFloor, live.price - RESISTANCE_DRIFT_PER_SEC * dt)
+      : live.price
   const price = round(driftedPrice)
   const distance = price - chart.price
 
   // Anti-pin: track how long the chart has floated above the line without a clean
   // break. Past the stale window, force a rejection so it drops back into range.
-  let aboveSinceMs = resistance.aboveSinceMs
+  let aboveSinceMs = live.aboveSinceMs
   if (chart.price > price + 1) {
     if (aboveSinceMs === 0 && now > 0) {
       aboveSinceMs = now
@@ -233,24 +280,26 @@ export function advanceResistance(
   }
   if (now > 0 && aboveSinceMs > 0 && now - aboveSinceMs >= RESISTANCE_STALE_ABOVE_MS) {
     return {
-      ...resistance,
+      ...live,
       price,
       windowUntil: 0,
       crossedAt: 0,
       phase: 'rejected',
       phaseUntil: now + RESISTANCE_REJECTED_HOLD_MS,
-      rejections: resistance.rejections + 1,
+      rejections: live.rejections + 1,
       breakoutStreak: 0,
+      crackPips: Math.min(RESISTANCE_MAX_CRACK_PIPS, live.crackPips + 1),
+      focusStartedAt: 0,
       lastRating: 'rejected',
       aboveSinceMs: 0,
     }
   }
 
   // Smash window: opens as the chart climbs into the near band, expires on its own.
-  const windowActive = resistance.windowUntil > now
-  const expiredWindow = resistance.windowUntil > 0 && !windowActive
-  let windowUntil = expiredWindow ? 0 : resistance.windowUntil
-  let crossedAt = expiredWindow ? 0 : resistance.crossedAt
+  const windowActive = live.windowUntil > now
+  const expiredWindow = live.windowUntil > 0 && !windowActive
+  let windowUntil = expiredWindow ? 0 : live.windowUntil
+  let crossedAt = expiredWindow ? 0 : live.crossedAt
 
   if (now > 0 && windowUntil === 0 && distance <= RESISTANCE_NEAR_BAND && distance >= -RESISTANCE_PERFECT_ABOVE) {
     crossedAt = now
@@ -258,14 +307,31 @@ export function advanceResistance(
   }
 
   const nowWindowActive = windowUntil > now
+  const phase = derivePhase(distance, nowWindowActive)
+  const focusPhase = phase === 'approaching' || phase === 'smash'
+  const nearEnoughForFocus = distance <= RESISTANCE_FOCUS_BAND && distance >= -RESISTANCE_PERFECT_ABOVE
+  const quietMs = opts.lastTapAt && opts.lastTapAt > 0 ? now - opts.lastTapAt : RESISTANCE_FOCUS_START_MS
+  const canBuildFocus =
+    now > 0 &&
+    opts.focusCanBuild === true &&
+    opts.heatSafe === true &&
+    focusPhase &&
+    nearEnoughForFocus &&
+    quietMs >= RESISTANCE_FOCUS_START_MS
+  const focusStartedAt = canBuildFocus
+    ? live.focusStartedAt > 0
+      ? live.focusStartedAt
+      : Math.max(1, now - RESISTANCE_FOCUS_START_MS)
+    : 0
 
   return {
-    ...resistance,
+    ...live,
     price,
     windowUntil,
     crossedAt,
-    phase: derivePhase(distance, nowWindowActive),
+    phase,
     aboveSinceMs,
+    focusStartedAt,
   }
 }
 
@@ -277,6 +343,18 @@ export function classifyTapRating(
 ): TapRating {
   if (overheated) {
     return 'overheated'
+  }
+
+  if (resistance.phase === 'overheated') {
+    return 'overheated'
+  }
+
+  if (resistance.phase === 'rejected') {
+    return 'rejected'
+  }
+
+  if (resistance.phase === 'broken' || resistance.phase === 'shattered') {
+    return 'weak'
   }
 
   const distance = resistance.price - chart.price
@@ -314,7 +392,12 @@ export function resolveBreakoutTap(
   // through the TOO HOT hold can't re-trigger the scold (and its combat text)
   // on every single tap — the reward/heat penalty for those repeat taps is
   // handled separately via the pre-tap rating scale in the reducer.
-  if (resistance.phase === 'broken' || resistance.phase === 'rejected' || resistance.phase === 'overheated') {
+  if (
+    resistance.phase === 'broken' ||
+    resistance.phase === 'rejected' ||
+    resistance.phase === 'overheated' ||
+    resistance.phase === 'shattered'
+  ) {
     return 'none'
   }
 
