@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   getResistanceCrackBand,
   getResistanceCrackPrice,
-  getResistanceSweepBand,
-  getResistanceSweepPos,
+  getResistanceCurvePriceAtPos,
+  isResistanceCrackAligned,
   OVERHEAT,
   RESISTANCE_MAX_CRACK_PIPS,
   type Candle,
@@ -166,29 +166,33 @@ export function FakeChart({
   const bodyWidth = Math.max(1.5, slot * 0.62)
   const currentCx = (visible.length - 1) * slot + slot / 2
   const currentCy = priceToY(chart.price)
-  const resistanceY = priceToY(resistance.price)
   const segmentX = WIDTH * 0.56
-  const segmentWidth = WIDTH - segmentX - 8
-  const segmentEndX = WIDTH - 8
-  const crackPos = Math.max(0.12, Math.min(0.88, resistance.crackTargetPos ?? 0.7))
-  const crackX = segmentX + segmentWidth * crackPos
-  const crackY = priceToY(getResistanceCrackPrice(resistance))
+  // v0.4F.2: the wall's right edge is pinned to the candle head's own x, not an
+  // arbitrary panel margin — the strike lane. The head is the game's only
+  // hitbox and the crack socket (drawn at this same lane below) is the wall's
+  // only target, so wall, socket, and head all agree on where "here" is.
+  const segmentEndX = currentCx
+  const segmentWidth = Math.max(1, segmentEndX - segmentX)
+  const now = Date.now()
+  // The wall sweeps: sample its price across the whole visible span so the
+  // drawn curve genuinely bows as the weak point travels, then read off the
+  // one sample that matters (the strike lane) for the crack socket itself.
+  const CURVE_SAMPLES = 20
+  const curveSamples = Array.from({ length: CURVE_SAMPLES + 1 }, (_, index) => {
+    const u = index / CURVE_SAMPLES
+    const x = segmentX + segmentWidth * u
+    const y = priceToY(getResistanceCurvePriceAtPos(resistance, u, now, overdrive))
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  })
+  const resistancePath = `M ${curveSamples.join(' ')}`
+  const crackX = segmentEndX
+  const crackPrice = getResistanceCrackPrice(resistance, now, overdrive)
+  const crackY = priceToY(crackPrice)
   const crackBandPx = Math.max(7, (getResistanceCrackBand(overdrive) / (DISPLAY_MAX - DISPLAY_MIN)) * HEIGHT)
-  const resistancePath = `M ${segmentX} ${resistanceY} Q ${(segmentX + crackX) / 2} ${resistanceY} ${crackX} ${crackY} Q ${
-    (crackX + segmentEndX) / 2
-  } ${resistanceY} ${segmentEndX} ${resistanceY}`
-  // v0.4F: the weak spot sweeps back and forth along the wall on a slow, readable
-  // clock (see game/chart.ts getResistanceSweepPos) — a traveling marker the
-  // player times a tap against, rather than the crack notch just sitting fixed.
-  // Its y rides the same two-segment shape as resistancePath above so it visibly
-  // glides along the drawn curve instead of floating off of it.
-  const sweepPos = Math.max(0.12, Math.min(0.88, getResistanceSweepPos(resistance, Date.now())))
-  const sweepX = segmentX + segmentWidth * sweepPos
-  const sweepY =
-    sweepPos <= crackPos
-      ? resistanceY + (crackY - resistanceY) * (sweepPos / crackPos)
-      : resistanceY + (crackY - resistanceY) * ((1 - sweepPos) / (1 - crackPos))
-  const sweepHot = Math.abs(sweepPos - crackPos) <= getResistanceSweepBand(overdrive)
+  // v0.4F.2: "hot" now means the head is actually within striking distance of
+  // the socket — the same vertical check the reducer uses to score a hit, not
+  // a second marker's position lining up with the crack's.
+  const crackReady = isResistanceCrackAligned(resistance, chart, now, overdrive)
   const bonusVisible = bonusTarget && Date.now() < bonusTarget.expiresAt
   const bonusX = bonusVisible ? Math.max(24, Math.min(WIDTH - 24, bonusTarget.xPos * WIDTH)) : 0
   const bonusY = bonusVisible ? priceToY(bonusTarget.price) : 0
@@ -229,7 +233,7 @@ export function FakeChart({
           {smash ? (
             <rect
               className="chart-smash-window"
-              x={Math.max(segmentX - 6, crackX - (overdrive ? 25 : 18))}
+              x={Math.min(WIDTH - (overdrive ? 54 : 40), Math.max(segmentX - 6, crackX - (overdrive ? 25 : 18)))}
               y={Math.max(0, crackY - crackBandPx - 3)}
               width={overdrive ? 50 : 36}
               height={crackBandPx * 2 + 6}
@@ -238,17 +242,23 @@ export function FakeChart({
           ) : null}
           <path className="chart-resistance-line halo" d={resistancePath} />
           <path className="chart-resistance-line core" d={resistancePath} />
-          {!shattered && !rejected ? (
-            <circle className="chart-sweep-marker" cx={sweepX} cy={sweepY} r={2.6} />
-          ) : null}
+          {/* v0.4F.2: the wall's own bow (above) already shows the weak point
+              traveling — there is exactly one target marker, the socket below,
+              always at the strike lane where the candle head lives. */}
           {!shattered && !rejected ? (
             <g
-              className={`chart-crack-target ${smash ? 'ready' : ''} ${overdrive ? 'overdrive' : ''} ${sweepHot ? 'hot' : ''}`}
+              className={`chart-crack-target ${smash ? 'ready' : ''} ${overdrive ? 'overdrive' : ''} ${crackReady ? 'hot' : ''}`}
               transform={`translate(${crackX} ${crackY})`}
             >
-              <circle className="chart-crack-ping" r={crackBandPx} />
-              <circle className="chart-crack-band" r={crackBandPx * 0.6} />
-              <circle className="chart-crack-core" r={4.4} />
+              {/* Scale-pulse lives on an inner group with no position transform of
+                  its own — a CSS transform animation on the outer group would
+                  replace its translate(crackX crackY) outright and teleport the
+                  socket to the SVG origin. */}
+              <g className="chart-crack-pulse">
+                <circle className="chart-crack-ping" r={crackBandPx} />
+                <circle className="chart-crack-band" r={crackBandPx * 0.6} />
+                <circle className="chart-crack-core" r={4.4} />
+              </g>
             </g>
           ) : null}
           {/* v0.4A: on a breakout the line shatters — an expanding burst ring at the
@@ -262,11 +272,7 @@ export function FakeChart({
               cy={crackY}
               r={6}
             />
-          ) : (
-            <text className="chart-resistance-label" x={segmentX - 8} y={Math.max(10, resistanceY - 8)}>
-              {approaching ? 'RESISTANCE ▲' : 'RESISTANCE'}
-            </text>
-          )}
+          ) : null}
         </g>
         {visible.map((candle, index) => {
           const cx = index * slot + slot / 2

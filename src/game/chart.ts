@@ -113,8 +113,6 @@ export const RESISTANCE_OVERHEAT_HOLD_MS = 560
 export const RESISTANCE_MAX_CRACK_PIPS = 3
 export const RESISTANCE_CRACK_ALIGN_BAND = 3.7
 export const RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE = 7.4
-export const RESISTANCE_CRACK_TRAJECTORY_BAND = 0.18
-export const RESISTANCE_CRACK_TRAJECTORY_BAND_OVERDRIVE = 0.32
 const RESISTANCE_CRACK_TARGET_MIN_POS = 0.16
 const RESISTANCE_CRACK_TARGET_MAX_POS = 0.82
 const RESISTANCE_CRACK_TARGET_MAX_OFFSET = 7.6
@@ -122,14 +120,22 @@ export const RESISTANCE_FOCUS_BAND = RESISTANCE_NEAR_BAND + 2
 export const RESISTANCE_FOCUS_START_MS = 300
 export const RESISTANCE_FOCUS_READY_MS = 650
 export const RESISTANCE_SHATTER_HOLD_MS = 900
-// v0.4F repair: the active weak spot's horizontal position sweeps back and forth
-// along the wall on a slow, readable clock (independent of chart velocity — the
-// old velocity-derived "trajectory" proxy meant most crackTargetPos values were
-// practically unreachable, which read as "the crack only lives in one spot").
-// One full front→back→front cycle.
+// v0.4F.2 repair: the wall itself sweeps — one weak point (u = 1, the strike
+// lane pinned to the candle-head's fixed x) rides a single traveling bump along
+// the wall's u-space (0..1). The crack socket is always drawn at the strike
+// lane; what changes is how close the bump's center currently is to u = 1, i.e.
+// how deep the wall dips there right now. One full front→back→front cycle.
 export const RESISTANCE_SWEEP_PERIOD_MS = 3200
-export const RESISTANCE_SWEEP_BAND = 0.15
-export const RESISTANCE_SWEEP_BAND_OVERDRIVE = 0.28
+export const RESISTANCE_SWEEP_PERIOD_MS_OVERDRIVE_SCALE = 1.6
+// How far (in wall u-space) the traveling bump's influence reaches — the crack
+// socket only dips below the flat wall price while the bump center is within
+// this distance of the strike lane (u = 1).
+export const RESISTANCE_CRACK_BUMP_HALF_WIDTH = 0.32
+// The strike lane's position in the wall's u-space. Pinned to 1 (the very end
+// of the sweep range) so it always lines up with the rendered wall's right
+// edge, which the renderer in turn pins to the candle head's fixed x — wall,
+// socket, and head all agree on where "the lane" is.
+export const RESISTANCE_HEAD_LANE_U = 1
 // Anti-pin: the chart sitting above the line this long without a clean break is
 // force-rejected, so it can never ride the line up into the ceiling. Shorter than
 // the slowest tap cadence would keep a line alive, so continuous play (which
@@ -201,6 +207,10 @@ function pickCrackTarget(
   }
 }
 
+// v0.4F.2: repositioning after a resolved beat now rerolls the bump's *phase*
+// seed (crackTargetPos) and its *depth* (crackTargetPriceOffset) rather than a
+// horizontal target the head could never reach — the sweep timing itself
+// reshuffles so a reroll doesn't just repeat the same beat forever.
 export function moveResistanceCrackTarget(resistance: ResistanceState): ResistanceState {
   const crackTargetSeq = resistance.crackTargetSeq + 1
   return {
@@ -210,37 +220,69 @@ export function moveResistanceCrackTarget(resistance: ResistanceState): Resistan
   }
 }
 
-export function getResistanceCrackPrice(resistance: ResistanceState): number {
-  return round(clamp(resistance.price + (resistance.crackTargetPriceOffset ?? 0), 28, 94))
+export function getResistanceSweepPeriodMs(overdriveActive = false): number {
+  return overdriveActive ? RESISTANCE_SWEEP_PERIOD_MS * RESISTANCE_SWEEP_PERIOD_MS_OVERDRIVE_SCALE : RESISTANCE_SWEEP_PERIOD_MS
+}
+
+// Where the wall's single traveling weak point currently sits in wall-space
+// (0..1), as a pure function of wall-clock time plus the target's id and
+// phase seed (so consecutive/repositioned targets don't all sweep in
+// lockstep). Overdrive slows the clock so the bump lingers longer near the
+// strike lane instead of just widening the hitbox around a fast-moving point.
+export function getResistanceSweepPos(resistance: ResistanceState, now: number, overdriveActive = false): number {
+  const phaseOffset = roll(resistance.id * 7.13 + (resistance.crackTargetPos ?? 0) * 53.7) * Math.PI * 2
+  const period = getResistanceSweepPeriodMs(overdriveActive)
+  const t = now <= 0 ? phaseOffset : (now / period) * Math.PI * 2 + phaseOffset
+  return round((Math.sin(t) + 1) / 2)
+}
+
+// Smooth falloff of the traveling bump's influence around its current center —
+// 1 right at the center, fading to 0 by RESISTANCE_CRACK_BUMP_HALF_WIDTH away.
+function crackBump(distanceU: number): number {
+  const half = RESISTANCE_CRACK_BUMP_HALF_WIDTH
+  if (Math.abs(distanceU) >= half) {
+    return 0
+  }
+  return (Math.cos((distanceU / half) * Math.PI) + 1) / 2
+}
+
+// The wall's price at an arbitrary wall-space position (0..1), used both to
+// sample the whole curve for rendering and to read the one position that
+// matters for hit detection: RESISTANCE_HEAD_LANE_U.
+export function getResistanceCurvePriceAtPos(
+  resistance: ResistanceState,
+  posU: number,
+  now: number,
+  overdriveActive = false,
+): number {
+  const center = getResistanceSweepPos(resistance, now, overdriveActive)
+  const amplitude = resistance.crackTargetPriceOffset ?? 0
+  return round(clamp(resistance.price + amplitude * crackBump(posU - center), 28, 94))
+}
+
+// The crack socket's price right now — the wall's height sampled at the fixed
+// strike lane (RESISTANCE_HEAD_LANE_U), which the renderer pins to the candle
+// head's fixed x. This is the only number a tap's chart price is ever compared
+// against; there is no separate horizontal/trajectory check.
+export function getResistanceCrackPrice(resistance: ResistanceState, now: number, overdriveActive = false): number {
+  return getResistanceCurvePriceAtPos(resistance, RESISTANCE_HEAD_LANE_U, now, overdriveActive)
 }
 
 export function getResistanceCrackBand(overdriveActive = false): number {
   return overdriveActive ? RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE : RESISTANCE_CRACK_ALIGN_BAND
 }
 
-export function getResistanceCrackAlignmentDistance(resistance: ResistanceState, chart: ChartState): number {
-  return Math.abs(getResistanceCrackPrice(resistance) - chart.price)
-}
-
-// Where the traveling weak-spot pointer currently sits along the wall (same
-// 0..1 span as crackTargetPos), as a pure function of wall-clock time and the
-// target's own id (so consecutive targets don't all sweep in lockstep). This
-// is what the player actually watches move on screen — steering means timing a
-// tap for when this pointer is passing near the target's crackTargetPos.
-export function getResistanceSweepPos(resistance: ResistanceState, now: number): number {
-  const span = RESISTANCE_CRACK_TARGET_MAX_POS - RESISTANCE_CRACK_TARGET_MIN_POS
-  const phaseOffset = roll(resistance.id * 7.13) * Math.PI * 2
-  const t = now <= 0 ? phaseOffset : (now / RESISTANCE_SWEEP_PERIOD_MS) * Math.PI * 2 + phaseOffset
-  const wave = (Math.sin(t) + 1) / 2
-  return round(RESISTANCE_CRACK_TARGET_MIN_POS + wave * span)
-}
-
-export function getResistanceSweepBand(overdriveActive = false): number {
-  return overdriveActive ? RESISTANCE_SWEEP_BAND_OVERDRIVE : RESISTANCE_SWEEP_BAND
-}
-
-export function getResistanceCrackSweepDistance(resistance: ResistanceState, now: number): number {
-  return Math.abs((resistance.crackTargetPos ?? 0.7) - getResistanceSweepPos(resistance, now))
+// Vertical distance from the snake head (chart price) to the crack socket
+// (wall price at the strike lane) right now. This single number is the whole
+// hit test — no velocity proxy, no trajectory proxy, no second x-alignment
+// check against a marker the head can't reach.
+export function getResistanceCrackAlignmentDistance(
+  resistance: ResistanceState,
+  chart: ChartState,
+  now: number,
+  overdriveActive = false,
+): number {
+  return Math.abs(getResistanceCrackPrice(resistance, now, overdriveActive) - chart.price)
 }
 
 export function isResistanceCrackAligned(
@@ -249,10 +291,7 @@ export function isResistanceCrackAligned(
   now: number,
   overdriveActive = false,
 ): boolean {
-  return (
-    getResistanceCrackAlignmentDistance(resistance, chart) <= getResistanceCrackBand(overdriveActive) &&
-    getResistanceCrackSweepDistance(resistance, now) <= getResistanceSweepBand(overdriveActive)
-  )
+  return getResistanceCrackAlignmentDistance(resistance, chart, now, overdriveActive) <= getResistanceCrackBand(overdriveActive)
 }
 
 export function createInitialResistance(anchorPrice: number, id = 1): ResistanceState {

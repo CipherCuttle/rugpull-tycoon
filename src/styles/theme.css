@@ -1606,10 +1606,14 @@ h2 {
   pointer-events: none;
 }
 
+/* v0.4F.2: the wall's own bow is the sweep — smooth the sampled-path redraws
+   between ticks instead of letting it snap. Where "d" interpolation isn't
+   supported it just steps at tick cadence, which already reads fine. */
 .chart-resistance-line {
   fill: none;
   stroke-linecap: round;
   stroke-linejoin: round;
+  transition: d 140ms linear;
 }
 
 .chart-resistance-line.halo {
@@ -1622,15 +1626,6 @@ h2 {
   stroke: var(--amber);
   stroke-width: 2.5;
   stroke-dasharray: 7 5;
-}
-
-.chart-resistance-label {
-  fill: var(--amber);
-  font-size: 7px;
-  font-weight: 1000;
-  letter-spacing: 0.08em;
-  text-anchor: end;
-  text-shadow: 0 0 7px rgba(255, 194, 58, 0.75);
 }
 
 /* v0.4A phase-driven line states. Approaching brightens the line so the player
@@ -1702,9 +1697,18 @@ h2 {
 }
 
 .chart-crack-target {
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.72)) drop-shadow(0 0 12px rgba(255, 194, 58, 0.5));
+  /* v0.4F.2: this group's position comes from the translate(crackX crackY)
+     attribute set in FakeChart, tracking the wall's height at the strike
+     lane every tick — smooth that instead of letting it snap. */
+  transition: transform 140ms linear;
+}
+
+/* Scale-pulse target: isolated from .chart-crack-target's position transform
+   so the SMASH NOW pulse (below) can't override the socket's translate. */
+.chart-crack-pulse {
   transform-box: fill-box;
   transform-origin: center;
-  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.72)) drop-shadow(0 0 12px rgba(255, 194, 58, 0.5));
 }
 
 .chart-crack-band {
@@ -1742,7 +1746,7 @@ h2 {
   stroke-width: 1.7;
 }
 
-.chart-crack-target.ready {
+.chart-crack-target.ready .chart-crack-pulse {
   animation: crack-target-pulse 320ms ease-in-out infinite;
 }
 
@@ -1756,14 +1760,6 @@ h2 {
 .chart-crack-target.overdrive .chart-crack-core {
   fill: #fff;
   stroke: var(--acid-2);
-}
-
-/* v0.4F: the traveling weak-spot pointer sweeping the wall — a small gleam the
-   player times a tap against, not a fixed clickable point. */
-.chart-sweep-marker {
-  fill: rgba(255, 255, 255, 0.6);
-  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.55));
-  transition: cx 140ms linear, cy 140ms linear;
 }
 
 .chart-bonus-target {
@@ -3103,7 +3099,7 @@ h2 {
   .chart-resistance-target.resistance-shattered .chart-resistance-line,
   .chart-resistance-burst,
   .chart-resistance-burst.shatter,
-  .chart-crack-target.ready,
+  .chart-crack-target.ready .chart-crack-pulse,
   .chart-crack-ping,
   .chart-bonus-target,
   .main-action.breakout-ready,
@@ -3135,6 +3131,14 @@ h2 {
   /* Fountain particles are removed from the DOM by their own timer; with the rise
      animation killed they simply appear then vanish — no large motion. */
   .fountain-hit {
+    transition: none;
+  }
+
+  /* v0.4F.2: the wall sweep and crack socket still update every tick (they're
+     gameplay state, not decoration), but drop the eased glide between ticks so
+     they step instead of continuously drifting. */
+  .chart-resistance-line,
+  .chart-crack-target {
     transition: none;
   }
 }

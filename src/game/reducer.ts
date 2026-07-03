@@ -75,7 +75,6 @@ import {
   createInitialChart,
   createInitialResistance,
   getResistanceCrackAlignmentDistance,
-  getResistanceCrackSweepDistance,
   isResistanceCrackAligned,
   isResistanceFocusReady,
   resolveBreakoutTap,
@@ -84,7 +83,6 @@ import {
   OVERHEAT,
   RESISTANCE_BROKEN_HOLD_MS,
   RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE,
-  RESISTANCE_SWEEP_BAND_OVERDRIVE,
   RESISTANCE_MAX_CRACK_PIPS,
   RESISTANCE_MISSED_HOLD_MS,
   RESISTANCE_OVERHEAT_HOLD_MS,
@@ -709,8 +707,7 @@ function resolveResistanceTap(
       !isOverdrive &&
       wasFocusReady &&
       smashActive &&
-      getResistanceCrackAlignmentDistance(state.resistance, state.chart) <= RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE &&
-      getResistanceCrackSweepDistance(state.resistance, now) <= RESISTANCE_SWEEP_BAND_OVERDRIVE
+      getResistanceCrackAlignmentDistance(state.resistance, state.chart, now) <= RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE
     const crackAligned = isResistanceCrackAligned(state.resistance, state.chart, now, isOverdrive) || focusAligned
 
     if (!crackAligned || !smashActive) {
@@ -754,7 +751,7 @@ function resolveResistanceTap(
       }
     }
 
-    const alignmentDistance = getResistanceCrackAlignmentDistance(state.resistance, state.chart)
+    const alignmentDistance = getResistanceCrackAlignmentDistance(state.resistance, state.chart, now, isOverdrive)
     const focusPerfect = wasFocusReady && wasSmash
     const overdrivePerfect = isOverdrive && alignmentDistance <= 3.2
     const perfect = outcome === 'breakout-perfect' || focusPerfect || overdrivePerfect

@@ -120,8 +120,8 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
             phase: {state.resistance.phase} · last {state.resistance.lastRating ?? '—'} · preview {tapPreview}
           </div>
           <div>
-            pips {state.resistance.crackPips} · crack {state.resistance.crackTargetPos.toFixed(2)} @
-            {getResistanceCrackPrice(state.resistance).toFixed(1)}
+            pips {state.resistance.crackPips} · crack phase {state.resistance.crackTargetPos.toFixed(2)} @
+            {getResistanceCrackPrice(state.resistance, now).toFixed(1)}
           </div>
           <div>sweep: {getResistanceSweepPos(state.resistance, now).toFixed(2)}</div>
           <div>
