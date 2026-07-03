@@ -1720,12 +1720,26 @@ h2 {
   stroke-width: 1.4;
 }
 
-.chart-crack-notch {
+/* v0.4F: the weak-point marker is a ping/ripple, not a debug X. A slow ambient
+   ripple invites the eye; it quickens once the smash window is live so the
+   player reads "this is about to matter." */
+.chart-crack-ping {
   fill: none;
-  stroke: #120b02;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke: rgba(255, 247, 184, 0.5);
+  stroke-width: 1.3;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: crack-ping 1500ms ease-out infinite;
+}
+
+.chart-crack-target.ready .chart-crack-ping {
+  animation-duration: 480ms;
+  stroke: rgba(255, 255, 255, 0.75);
+}
+
+.chart-crack-target.hot .chart-crack-ping {
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 1.7;
 }
 
 .chart-crack-target.ready {
@@ -1733,7 +1747,8 @@ h2 {
 }
 
 .chart-crack-target.ready .chart-crack-band,
-.chart-crack-target.overdrive .chart-crack-band {
+.chart-crack-target.overdrive .chart-crack-band,
+.chart-crack-target.hot .chart-crack-band {
   fill: rgba(255, 255, 255, 0.17);
   stroke: rgba(255, 255, 255, 0.72);
 }
@@ -1741,6 +1756,14 @@ h2 {
 .chart-crack-target.overdrive .chart-crack-core {
   fill: #fff;
   stroke: var(--acid-2);
+}
+
+/* v0.4F: the traveling weak-spot pointer sweeping the wall — a small gleam the
+   player times a tap against, not a fixed clickable point. */
+.chart-sweep-marker {
+  fill: rgba(255, 255, 255, 0.6);
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.55));
+  transition: cx 140ms linear, cy 140ms linear;
 }
 
 .chart-bonus-target {
@@ -2752,6 +2775,17 @@ h2 {
   }
 }
 
+@keyframes crack-ping {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+}
+
 @keyframes bonus-target-float {
   0%,
   100% {
@@ -3070,6 +3104,7 @@ h2 {
   .chart-resistance-burst,
   .chart-resistance-burst.shatter,
   .chart-crack-target.ready,
+  .chart-crack-ping,
   .chart-bonus-target,
   .main-action.breakout-ready,
   .main-action.breakout-rejected,

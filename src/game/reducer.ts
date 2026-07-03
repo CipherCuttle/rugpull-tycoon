@@ -75,7 +75,7 @@ import {
   createInitialChart,
   createInitialResistance,
   getResistanceCrackAlignmentDistance,
-  getResistanceCrackTrajectoryDistance,
+  getResistanceCrackSweepDistance,
   isResistanceCrackAligned,
   isResistanceFocusReady,
   resolveBreakoutTap,
@@ -84,7 +84,7 @@ import {
   OVERHEAT,
   RESISTANCE_BROKEN_HOLD_MS,
   RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE,
-  RESISTANCE_CRACK_TRAJECTORY_BAND_OVERDRIVE,
+  RESISTANCE_SWEEP_BAND_OVERDRIVE,
   RESISTANCE_MAX_CRACK_PIPS,
   RESISTANCE_MISSED_HOLD_MS,
   RESISTANCE_OVERHEAT_HOLD_MS,
@@ -710,8 +710,8 @@ function resolveResistanceTap(
       wasFocusReady &&
       smashActive &&
       getResistanceCrackAlignmentDistance(state.resistance, state.chart) <= RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE &&
-      getResistanceCrackTrajectoryDistance(state.resistance, state.chart) <= RESISTANCE_CRACK_TRAJECTORY_BAND_OVERDRIVE
-    const crackAligned = isResistanceCrackAligned(state.resistance, state.chart, isOverdrive) || focusAligned
+      getResistanceCrackSweepDistance(state.resistance, now) <= RESISTANCE_SWEEP_BAND_OVERDRIVE
+    const crackAligned = isResistanceCrackAligned(state.resistance, state.chart, now, isOverdrive) || focusAligned
 
     if (!crackAligned || !smashActive) {
       const bonusCurve = walletGain * BREAKOUT_CURVE_BONUS_MISSED
@@ -758,8 +758,10 @@ function resolveResistanceTap(
     const focusPerfect = wasFocusReady && wasSmash
     const overdrivePerfect = isOverdrive && alignmentDistance <= 3.2
     const perfect = outcome === 'breakout-perfect' || focusPerfect || overdrivePerfect
-    const pipDamage = perfect ? 2 : 1
-    const crackPips = Math.max(0, state.resistance.crackPips - pipDamage)
+    // v0.4F: flat 1 pip per clean hit — perfect already pays out bigger currency/
+    // Supercharge/quality gains below, so it no longer also halves the streak
+    // needed to shatter. Shatter now always costs a real, uninterrupted streak.
+    const crackPips = Math.max(0, state.resistance.crackPips - 1)
     const shattered = crackPips === 0
     const streak = state.resistance.crackHitStreak + 1
     const nextResistance: ResistanceState = {

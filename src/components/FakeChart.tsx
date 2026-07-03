@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import {
   getResistanceCrackBand,
   getResistanceCrackPrice,
+  getResistanceSweepBand,
+  getResistanceSweepPos,
   OVERHEAT,
   RESISTANCE_MAX_CRACK_PIPS,
   type Candle,
@@ -175,6 +177,18 @@ export function FakeChart({
   const resistancePath = `M ${segmentX} ${resistanceY} Q ${(segmentX + crackX) / 2} ${resistanceY} ${crackX} ${crackY} Q ${
     (crackX + segmentEndX) / 2
   } ${resistanceY} ${segmentEndX} ${resistanceY}`
+  // v0.4F: the weak spot sweeps back and forth along the wall on a slow, readable
+  // clock (see game/chart.ts getResistanceSweepPos) — a traveling marker the
+  // player times a tap against, rather than the crack notch just sitting fixed.
+  // Its y rides the same two-segment shape as resistancePath above so it visibly
+  // glides along the drawn curve instead of floating off of it.
+  const sweepPos = Math.max(0.12, Math.min(0.88, getResistanceSweepPos(resistance, Date.now())))
+  const sweepX = segmentX + segmentWidth * sweepPos
+  const sweepY =
+    sweepPos <= crackPos
+      ? resistanceY + (crackY - resistanceY) * (sweepPos / crackPos)
+      : resistanceY + (crackY - resistanceY) * ((1 - sweepPos) / (1 - crackPos))
+  const sweepHot = Math.abs(sweepPos - crackPos) <= getResistanceSweepBand(overdrive)
   const bonusVisible = bonusTarget && Date.now() < bonusTarget.expiresAt
   const bonusX = bonusVisible ? Math.max(24, Math.min(WIDTH - 24, bonusTarget.xPos * WIDTH)) : 0
   const bonusY = bonusVisible ? priceToY(bonusTarget.price) : 0
@@ -225,10 +239,16 @@ export function FakeChart({
           <path className="chart-resistance-line halo" d={resistancePath} />
           <path className="chart-resistance-line core" d={resistancePath} />
           {!shattered && !rejected ? (
-            <g className={`chart-crack-target ${smash ? 'ready' : ''} ${overdrive ? 'overdrive' : ''}`} transform={`translate(${crackX} ${crackY})`}>
-              <circle className="chart-crack-band" r={crackBandPx} />
-              <circle className="chart-crack-core" r={5.4} />
-              <path className="chart-crack-notch" d="M -7 -8 L -1 -1 L -6 8 M 4 -8 L 0 0 L 8 7" />
+            <circle className="chart-sweep-marker" cx={sweepX} cy={sweepY} r={2.6} />
+          ) : null}
+          {!shattered && !rejected ? (
+            <g
+              className={`chart-crack-target ${smash ? 'ready' : ''} ${overdrive ? 'overdrive' : ''} ${sweepHot ? 'hot' : ''}`}
+              transform={`translate(${crackX} ${crackY})`}
+            >
+              <circle className="chart-crack-ping" r={crackBandPx} />
+              <circle className="chart-crack-band" r={crackBandPx * 0.6} />
+              <circle className="chart-crack-core" r={4.4} />
             </g>
           ) : null}
           {/* v0.4A: on a breakout the line shatters — an expanding burst ring at the

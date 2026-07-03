@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   classifyTapRating,
-  getChartTrajectoryPos,
   getResistanceCrackPrice,
   getResistanceFocusMs,
+  getResistanceSweepPos,
   isResistanceFocusReady,
   OVERHEAT,
 } from '../game/chart'
@@ -123,7 +123,7 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
             pips {state.resistance.crackPips} · crack {state.resistance.crackTargetPos.toFixed(2)} @
             {getResistanceCrackPrice(state.resistance).toFixed(1)}
           </div>
-          <div>trajectory: {getChartTrajectoryPos(state.chart).toFixed(2)}</div>
+          <div>sweep: {getResistanceSweepPos(state.resistance, now).toFixed(2)}</div>
           <div>
             focus {Math.round(focusMs)}ms {focusReady ? 'READY' : ''}
           </div>

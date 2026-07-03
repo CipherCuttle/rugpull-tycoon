@@ -122,6 +122,14 @@ export const RESISTANCE_FOCUS_BAND = RESISTANCE_NEAR_BAND + 2
 export const RESISTANCE_FOCUS_START_MS = 300
 export const RESISTANCE_FOCUS_READY_MS = 650
 export const RESISTANCE_SHATTER_HOLD_MS = 900
+// v0.4F repair: the active weak spot's horizontal position sweeps back and forth
+// along the wall on a slow, readable clock (independent of chart velocity — the
+// old velocity-derived "trajectory" proxy meant most crackTargetPos values were
+// practically unreachable, which read as "the crack only lives in one spot").
+// One full front→back→front cycle.
+export const RESISTANCE_SWEEP_PERIOD_MS = 3200
+export const RESISTANCE_SWEEP_BAND = 0.15
+export const RESISTANCE_SWEEP_BAND_OVERDRIVE = 0.28
 // Anti-pin: the chart sitting above the line this long without a clean break is
 // force-rejected, so it can never ride the line up into the ceiling. Shorter than
 // the slowest tap cadence would keep a line alive, so continuous play (which
@@ -214,23 +222,36 @@ export function getResistanceCrackAlignmentDistance(resistance: ResistanceState,
   return Math.abs(getResistanceCrackPrice(resistance) - chart.price)
 }
 
-export function getChartTrajectoryPos(chart: ChartState): number {
-  return round(clamp(0.5 + chart.velocity / 120, 0.12, 0.88))
+// Where the traveling weak-spot pointer currently sits along the wall (same
+// 0..1 span as crackTargetPos), as a pure function of wall-clock time and the
+// target's own id (so consecutive targets don't all sweep in lockstep). This
+// is what the player actually watches move on screen — steering means timing a
+// tap for when this pointer is passing near the target's crackTargetPos.
+export function getResistanceSweepPos(resistance: ResistanceState, now: number): number {
+  const span = RESISTANCE_CRACK_TARGET_MAX_POS - RESISTANCE_CRACK_TARGET_MIN_POS
+  const phaseOffset = roll(resistance.id * 7.13) * Math.PI * 2
+  const t = now <= 0 ? phaseOffset : (now / RESISTANCE_SWEEP_PERIOD_MS) * Math.PI * 2 + phaseOffset
+  const wave = (Math.sin(t) + 1) / 2
+  return round(RESISTANCE_CRACK_TARGET_MIN_POS + wave * span)
 }
 
-export function getResistanceCrackTrajectoryDistance(resistance: ResistanceState, chart: ChartState): number {
-  return Math.abs((resistance.crackTargetPos ?? 0.7) - getChartTrajectoryPos(chart))
+export function getResistanceSweepBand(overdriveActive = false): number {
+  return overdriveActive ? RESISTANCE_SWEEP_BAND_OVERDRIVE : RESISTANCE_SWEEP_BAND
+}
+
+export function getResistanceCrackSweepDistance(resistance: ResistanceState, now: number): number {
+  return Math.abs((resistance.crackTargetPos ?? 0.7) - getResistanceSweepPos(resistance, now))
 }
 
 export function isResistanceCrackAligned(
   resistance: ResistanceState,
   chart: ChartState,
+  now: number,
   overdriveActive = false,
 ): boolean {
-  const trajectoryBand = overdriveActive ? RESISTANCE_CRACK_TRAJECTORY_BAND_OVERDRIVE : RESISTANCE_CRACK_TRAJECTORY_BAND
   return (
     getResistanceCrackAlignmentDistance(resistance, chart) <= getResistanceCrackBand(overdriveActive) &&
-    getResistanceCrackTrajectoryDistance(resistance, chart) <= trajectoryBand
+    getResistanceCrackSweepDistance(resistance, now) <= getResistanceSweepBand(overdriveActive)
   )
 }
 
@@ -326,7 +347,12 @@ export function advanceResistance(
       if (live.phase === 'shattered') {
         return respawnResistance(live, chart)
       }
-      live = live.phase === 'broken' ? moveResistanceCrackTarget(clearTransientBeat(live)) : clearTransientBeat(live)
+      // v0.4F: reposition the weak spot after any resolved beat — hit, miss, or
+      // rejection — not just a clean break. Previously only 'broken' moved the
+      // target, so a target that landed somewhere the player couldn't reach
+      // (see the old velocity-gated alignment check) sat static forever.
+      const repositions = live.phase === 'broken' || live.phase === 'missed' || live.phase === 'rejected'
+      live = repositions ? moveResistanceCrackTarget(clearTransientBeat(live)) : clearTransientBeat(live)
     } else {
       return live
     }
