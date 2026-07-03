@@ -188,16 +188,16 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
   const qualityRemaining = Math.max(0, Math.ceil(BREAKOUT_QUALITY_ARM_THRESHOLD - state.breakoutQualityScore))
   const qualityReady = qualityRemaining <= 0
   const showQualityHint = launched && !graduateReady && !overdrive && superchargePct >= 60
-  const cleanBreakoutsCopy = `${qualityRemaining} MORE CLEAN BREAKOUT${qualityRemaining === 1 ? '' : 'S'}`
+  const cleanBreakoutsCopy = `${qualityRemaining} MORE CRACK HIT${qualityRemaining === 1 ? '' : 'S'}`
   let superchargeLabel: string
   if (supercharged) {
     superchargeLabel = qualityReady
       ? 'OVERDRIVE READY'
       : qualityRemaining >= BREAKOUT_QUALITY_ARM_THRESHOLD
-        ? 'MASH OPEN — NEED CLEAN BREAKOUTS'
-        : `MASH OPEN — ${cleanBreakoutsCopy}`
+        ? 'CRACKS ARM OVERDRIVE'
+        : `WEAK SPOTS — ${cleanBreakoutsCopy}`
   } else if (showQualityHint) {
-    superchargeLabel = qualityReady ? 'BREAKOUTS ARM OVERDRIVE' : cleanBreakoutsCopy
+    superchargeLabel = qualityReady ? 'CRACKS ARM OVERDRIVE' : cleanBreakoutsCopy
   } else {
     superchargeLabel = 'SUPERCHARGE'
   }
@@ -223,16 +223,19 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
     detail = 'The bonding curve is done pretending.'
   } else if (overdrive) {
     label = 'OVERDRIVE'
-    detail = 'MASH WITHOUT CONSEQUENCES'
+    detail = 'HIT EVERY WEAK SPOT'
   } else if (phase === 'smash') {
     label = 'SMASH RESISTANCE'
-    detail = focusReady ? 'NOW' : 'TAP NOW FOR BREAKOUT'
+    detail = focusReady ? 'PERFECT CRACK READY' : 'AIM FOR THE CRACK'
   } else if (phase === 'broken') {
-    label = 'WALL CRACKED'
+    label = state.resistance.lastRating === 'perfect' ? 'PERFECT CRACK' : 'CRACK HIT'
     detail =
       state.resistance.crackPips === 1
         ? 'ONE CLEAN HIT TO SHATTER'
         : `${state.resistance.crackPips} PIPS LEFT`
+  } else if (phase === 'missed') {
+    label = 'MISSED CRACK'
+    detail = 'MOMENTUM LOST'
   } else if (phase === 'shattered') {
     label = 'WALL SHATTERED'
     detail = 'JACKPOT'
@@ -253,7 +256,7 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
     detail = CHAIN_BREAKING_LINES[state.taps % CHAIN_BREAKING_LINES.length]
   } else if (phase === 'approaching') {
     label = focusNear ? (focusReady ? 'PERFECT READY' : focusBuilding ? 'FOCUSING' : 'HOLD YOUR NERVE') : 'SEND THE CANDLE'
-    detail = focusNear ? (focusReady ? 'STRIKE ON SMASH' : focusBuilding ? 'WAIT FOR THE BREAK' : 'DO NOT PANIC TAP') : 'GET READY — LINE UP THE WALL'
+    detail = focusNear ? (focusReady ? 'STRIKE THE CRACK' : focusBuilding ? 'WAIT FOR THE WEAK SPOT' : 'DO NOT PANIC TAP') : 'GET READY — LINE UP THE CRACK'
   } else {
     label = 'SEND THE CANDLE'
     detail = 'BUILD MOMENTUM TO RESISTANCE'
@@ -294,7 +297,9 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
         } ${resistancePhase === 'smash' ? 'breakout-ready' : ''} ${resistancePhase === 'broken' ? 'broken' : ''} ${
           resistancePhase === 'shattered' ? 'shattered' : ''
         } ${focusReady ? 'focus-ready' : ''} ${
-          resistancePhase === 'rejected' || resistancePhase === 'overheated' ? 'breakout-rejected' : ''
+          resistancePhase === 'rejected' || resistancePhase === 'overheated' || resistancePhase === 'missed'
+            ? 'breakout-rejected'
+            : ''
         }`}
         type="button"
         onClick={handleClick}
@@ -331,7 +336,7 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
         >
           {overdrive ? (
             <>
-              <span className="supercharge-label">OVERDRIVE — JEETS ARE ILLEGAL</span>
+              <span className="supercharge-label">OVERDRIVE — CRACKS WIDE OPEN</span>
               <div className="supercharge-track">
                 <div className="supercharge-fill overdrive-countdown" style={{ width: `${overdrivePct}%` }} />
               </div>
@@ -340,8 +345,9 @@ export function MainActionButton({ state, onLaunch, onSend, onGraduateClick }: M
           ) : breakoutReward ? (
             <>
               <span className="supercharge-label breakout">
-                {breakoutReward.shattered ? 'SHATTERED' : breakoutReward.focusPerfect ? 'FOCUS PERFECT' : 'BREAKOUT'} +
+                {breakoutReward.shattered ? 'SHATTERED' : breakoutReward.focusPerfect ? 'PERFECT CRACK' : 'CRACK HIT'} +
                 {breakoutReward.superchargeGain}⚡ · +{breakoutReward.curvePercent.toFixed(2)}% CURVE
+                {breakoutReward.crackStreak && breakoutReward.crackStreak >= 2 ? ` · ×${breakoutReward.crackStreak}` : ''}
               </span>
               <div className="supercharge-track">
                 <div className="supercharge-fill" style={{ width: `${superchargePct}%` }} />

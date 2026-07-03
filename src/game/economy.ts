@@ -434,9 +434,9 @@ export function getChartAutoImpulse(state: GameState): number {
 // target the instant BEFORE its own impulse lands — perfect/good read as "you
 // timed this", weak/rejected/overheated read as "you didn't". These three scales
 // turn that read into the actual incentive: precise taps pay more and cook less,
-// spam taps pay less and cook more. `null` (Overdrive bypasses classification
-// entirely — see reducer.ts) always means "no penalty, no bonus", preserving
-// Overdrive's "mash without consequences" contract.
+// spam taps pay less and cook more. `null` is still accepted for old call sites,
+// but v0.4F keeps classification active during Overdrive so the wide crack
+// window, not blind mashing, is what makes that mode powerful.
 export function getTapRatingRewardScale(rating: TapRating | null): number {
   switch (rating) {
     case 'perfect':

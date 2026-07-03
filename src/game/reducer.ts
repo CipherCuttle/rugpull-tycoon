@@ -74,19 +74,35 @@ import {
   classifyTapRating,
   createInitialChart,
   createInitialResistance,
+  getResistanceCrackAlignmentDistance,
+  getResistanceCrackTrajectoryDistance,
+  isResistanceCrackAligned,
   isResistanceFocusReady,
   resolveBreakoutTap,
   CHART_HEAT_PER_TAP,
   CHART_TAP_STEP,
   OVERHEAT,
   RESISTANCE_BROKEN_HOLD_MS,
+  RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE,
+  RESISTANCE_CRACK_TRAJECTORY_BAND_OVERDRIVE,
   RESISTANCE_MAX_CRACK_PIPS,
+  RESISTANCE_MISSED_HOLD_MS,
   RESISTANCE_OVERHEAT_HOLD_MS,
   RESISTANCE_OVERHEAT_RECOVERY_SCALE,
   RESISTANCE_REJECTED_HOLD_MS,
   RESISTANCE_SHATTER_HOLD_MS,
 } from './chart'
-import type { EventProgress, FountainKind, GameAction, GameState, ResourceState, TapRating, ToastKind } from './types'
+import type {
+  BonusTarget,
+  EventProgress,
+  FountainKind,
+  GameAction,
+  GameState,
+  ResistanceState,
+  ResourceState,
+  TapRating,
+  ToastKind,
+} from './types'
 import { SAVE_VERSION } from './types'
 
 const MAX_TICKER_LINES = 14
@@ -145,6 +161,7 @@ export function createInitialGame(): GameState {
     fountainSeq: 0,
     chart,
     resistance: createInitialResistance(chart.price),
+    bonusTarget: null,
     upgrades: initialUpgrades(),
     cards: initialCards(),
     event: {
@@ -245,11 +262,11 @@ function pushFountain(state: GameState, text: string, kind: FountainKind): GameS
 
 const SUPERCHARGE_ONLINE_LINES = ['SUPERCHARGED', 'THE CANDLE ENGINE IS SCREAMING', 'MASH WINDOW OPEN']
 const OVERDRIVE_START_LINES = [
-  'OVERDRIVE ACTIVE',
-  'MASH WITHOUT CONSEQUENCES',
-  'GRAVITY HAS LEFT THE CHAT',
-  'JEETS ARE TEMPORARILY ILLEGAL',
-  'THE CHART IS NOW PURE FICTION',
+  'OVERDRIVE - CRACKS WIDE OPEN',
+  'OVERDRIVE - HIT EVERY WEAK SPOT',
+  'OVERDRIVE - THE WALL IS SOFT',
+  'OVERDRIVE - PRECISION WINDOW OPEN',
+  'OVERDRIVE - AIM THE CANDLE',
 ]
 
 function stampStreakReward(state: GameState, combo: number): GameState {
@@ -552,7 +569,11 @@ function launchCoin(state: GameState): GameState {
 const BREAKOUT_CURVE_BONUS_PERFECT = 0.7
 const BREAKOUT_CURVE_BONUS_GOOD = 0.35
 const BREAKOUT_CURVE_BONUS_FOCUS = 0.22
+const BREAKOUT_CURVE_BONUS_MISSED = 0.1
 const SHATTER_CURVE_BONUS = 1.15
+const CRACK_STREAK_CURVE_BONUS_STEP = 0.06
+const CRACK_STREAK_CURVE_BONUS_MAX = 0.36
+const OVERDRIVE_CRACK_REWARD_SCALE = 1.22
 // v0.4C Overdrive Quality Gate: this is now the PRIMARY Overdrive fuel (the tick
 // loop no longer builds Supercharge off raw combo — see updateStreakMeters), so
 // the perfect/good gap widened from v0.4B's 10/5 to make timing read as clearly
@@ -563,10 +584,91 @@ const BREAKOUT_SUPERCHARGE_GAIN_GOOD = 8
 const BREAKOUT_SUPERCHARGE_GAIN_FOCUS = 5
 const SHATTER_SUPERCHARGE_GAIN = 24
 const SHATTER_IMPULSE = 12.5
+const MISSED_CRACK_DUMP = 8
+const OVERDRIVE_MISSED_CRACK_DUMP = 4
 const PANIC_TAP_GAP_MS = 240
+const BONUS_TARGET_LIFETIME_MS = 2100
+const BONUS_TARGET_BAND = 6
+const BONUS_TARGET_BAND_OVERDRIVE = 8.5
 
-type BreakoutReward = { chain: number; superchargeGain: number; curvePercent: number; shattered?: boolean; focusPerfect?: boolean }
+type BreakoutReward = {
+  chain: number
+  crackStreak?: number
+  superchargeGain: number
+  curvePercent: number
+  shattered?: boolean
+  focusPerfect?: boolean
+}
 type SuperchargeNote = { text: string; kind: 'loss' | 'blocked' }
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value))
+}
+
+function roundNumber(value: number): number {
+  return Number(value.toFixed(2))
+}
+
+function spawnBonusTarget(state: GameState, now: number): GameState {
+  const seed = state.resistance.id * 31.7 + state.taps * 5.11 + state.resistance.crackHitStreak * 13.3
+  const xPos = 0.62 + deterministicRoll(seed) * 0.28
+  let price = clampNumber(state.chart.price + (deterministicRoll(seed + 9.7) - 0.44) * 24, 18, 88)
+
+  if (Math.abs(price - state.resistance.price) < 10) {
+    const below = state.resistance.price - (13 + deterministicRoll(seed + 19.1) * 12)
+    const above = state.resistance.price + (12 + deterministicRoll(seed + 27.3) * 9)
+    price = clampNumber(below >= 18 ? below : above, 18, 88)
+  }
+
+  const id = state.effectSeq + 1
+  const bonusTarget: BonusTarget = {
+    id,
+    xPos: roundNumber(xPos),
+    price: roundNumber(price),
+    spawnedAt: now,
+    expiresAt: now + BONUS_TARGET_LIFETIME_MS,
+  }
+
+  return { ...state, effectSeq: id, bonusTarget }
+}
+
+function resolveBonusTarget(state: GameState, now: number, overdriveActive: boolean): GameState {
+  const target = state.bonusTarget
+
+  if (!target) {
+    return state
+  }
+
+  if (now > 0 && now >= target.expiresAt) {
+    return pushFountain({ ...state, bonusTarget: null }, 'BONUS MISSED', 'reject')
+  }
+
+  const band = overdriveActive ? BONUS_TARGET_BAND_OVERDRIVE : BONUS_TARGET_BAND
+  const caught = Math.abs(state.chart.price - target.price) <= band
+
+  if (!caught) {
+    return state
+  }
+
+  const streakScale = 1 + Math.min(state.resistance.crackHitStreak, 4) * 0.12
+  const bonusCurve = getClickGain(state) * 1.3 * streakScale
+  let next = awardLiquidity(state, 0, bonusCurve)
+  next = {
+    ...next,
+    bonusTarget: null,
+    supercharge: Math.min(SUPERCHARGE_MAX, next.supercharge + 10),
+    resources: {
+      ...next.resources,
+      heat: Math.max(0, next.resources.heat - 6),
+    },
+    chart: {
+      ...next.chart,
+      heat: Math.max(0, next.chart.heat - 14),
+    },
+  }
+
+  return pushFountain(next, 'BONUS CAUGHT', 'supercharge')
+}
 
 // v0.4A Resistance Breakout. Read AFTER the tap's chart impulse has landed and
 // classify what it did to the line, then stamp the matching arcade event beat
@@ -602,48 +704,108 @@ function resolveResistanceTap(
   }
 
   if (outcome === 'breakout-perfect' || outcome === 'breakout-good') {
-    const focusPerfect = !isOverdrive && wasFocusReady && wasSmash
-    const perfect = outcome === 'breakout-perfect' || focusPerfect
+    const smashActive = state.resistance.phase === 'smash'
+    const focusAligned =
+      !isOverdrive &&
+      wasFocusReady &&
+      smashActive &&
+      getResistanceCrackAlignmentDistance(state.resistance, state.chart) <= RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE &&
+      getResistanceCrackTrajectoryDistance(state.resistance, state.chart) <= RESISTANCE_CRACK_TRAJECTORY_BAND_OVERDRIVE
+    const crackAligned = isResistanceCrackAligned(state.resistance, state.chart, isOverdrive) || focusAligned
+
+    if (!crackAligned || !smashActive) {
+      const bonusCurve = walletGain * BREAKOUT_CURVE_BONUS_MISSED
+      let next: GameState = {
+        ...state,
+        breakoutQualityScore: Math.max(0, state.breakoutQualityScore - BREAKOUT_QUALITY_LOSS * 0.5),
+        resources: {
+          ...state.resources,
+          heat: isOverdrive ? state.resources.heat : state.resources.heat + 2,
+        },
+        resistance: {
+          ...state.resistance,
+          phase: 'missed',
+          phaseUntil: now + RESISTANCE_MISSED_HOLD_MS,
+          windowUntil: 0,
+          crossedAt: 0,
+          breakoutStreak: 0,
+          crackHitStreak: 0,
+          crackPips: Math.min(RESISTANCE_MAX_CRACK_PIPS, state.resistance.crackPips + 1),
+          focusStartedAt: 0,
+          lastRating: 'weak',
+          aboveSinceMs: 0,
+        },
+      }
+
+      next = advanceChartState(
+        next,
+        CHART_TAP_STEP,
+        { jeetDump: isOverdrive ? OVERDRIVE_MISSED_CRACK_DUMP : MISSED_CRACK_DUMP, frictionScale: isOverdrive ? 0.86 : 1.08 },
+        now,
+      )
+      next = awardLiquidity(next, 0, bonusCurve)
+
+      return {
+        next,
+        rating: 'weak',
+        breakoutReward: null,
+        superchargeNote: { text: 'MISSED CRACK - WALL SEALED', kind: 'blocked' },
+        timingLabel: 'MISSED CRACK',
+      }
+    }
+
+    const alignmentDistance = getResistanceCrackAlignmentDistance(state.resistance, state.chart)
+    const focusPerfect = wasFocusReady && wasSmash
+    const overdrivePerfect = isOverdrive && alignmentDistance <= 3.2
+    const perfect = outcome === 'breakout-perfect' || focusPerfect || overdrivePerfect
     const pipDamage = perfect ? 2 : 1
     const crackPips = Math.max(0, state.resistance.crackPips - pipDamage)
     const shattered = crackPips === 0
-    const streak = state.resistance.breakoutStreak + 1
+    const streak = state.resistance.crackHitStreak + 1
+    const nextResistance: ResistanceState = {
+      ...state.resistance,
+      phase: shattered ? 'shattered' : 'broken',
+      phaseUntil: now + (shattered ? RESISTANCE_SHATTER_HOLD_MS : RESISTANCE_BROKEN_HOLD_MS),
+      windowUntil: 0,
+      crossedAt: 0,
+      breakoutStreak: streak,
+      crackHitStreak: streak,
+      perfectBreakouts: state.resistance.perfectBreakouts + (perfect ? 1 : 0),
+      lastResistanceHitAt: now,
+      lastRating: perfect ? 'perfect' : 'good',
+      crackPips,
+      focusStartedAt: 0,
+      aboveSinceMs: 0,
+    }
     let next: GameState = {
       ...state,
-      resistance: {
-        ...state.resistance,
-        phase: shattered ? 'shattered' : 'broken',
-        phaseUntil: now + (shattered ? RESISTANCE_SHATTER_HOLD_MS : RESISTANCE_BROKEN_HOLD_MS),
-        windowUntil: 0,
-        crossedAt: 0,
-        breakoutStreak: streak,
-        perfectBreakouts: state.resistance.perfectBreakouts + (perfect ? 1 : 0),
-        lastResistanceHitAt: now,
-        lastRating: perfect ? 'perfect' : 'good',
-        crackPips,
-        focusStartedAt: 0,
-        aboveSinceMs: 0,
-      },
+      resistance: nextResistance,
     }
     // Breakout pop: a punchy upward impulse through where the line was. The target
     // is already frozen ('broken'), so this extra step won't reopen a window.
-    const impulse = shattered ? SHATTER_IMPULSE : focusPerfect ? 10.5 : perfect ? 9 : 6.5
+    const impulse = (shattered ? SHATTER_IMPULSE : focusPerfect ? 10.5 : perfect ? 9 : 6.5) * (isOverdrive ? 1.08 : 1)
     next = advanceChartState(next, CHART_TAP_STEP, { impulse, frictionScale: shattered ? 0.58 : 0.7 }, now)
+    const streakBonus = Math.min(CRACK_STREAK_CURVE_BONUS_MAX, (streak - 1) * CRACK_STREAK_CURVE_BONUS_STEP)
     const curveBonusScale =
-      (perfect ? BREAKOUT_CURVE_BONUS_PERFECT : BREAKOUT_CURVE_BONUS_GOOD) +
-      (focusPerfect ? BREAKOUT_CURVE_BONUS_FOCUS : 0) +
-      (shattered ? SHATTER_CURVE_BONUS : 0)
+      ((perfect ? BREAKOUT_CURVE_BONUS_PERFECT : BREAKOUT_CURVE_BONUS_GOOD) +
+        (focusPerfect ? BREAKOUT_CURVE_BONUS_FOCUS : 0) +
+        streakBonus +
+        (shattered ? SHATTER_CURVE_BONUS : 0)) *
+      (isOverdrive ? OVERDRIVE_CRACK_REWARD_SCALE : 1)
     const bonusCurve = walletGain * curveBonusScale
     const curvePercent = getBondingCurveDelta(next, bonusCurve)
     next = awardLiquidity(next, 0, bonusCurve)
     const baseSuperchargeGain = perfect ? BREAKOUT_SUPERCHARGE_GAIN_PERFECT : BREAKOUT_SUPERCHARGE_GAIN_GOOD
     const superchargeGain = Math.round(
-      (baseSuperchargeGain + (focusPerfect ? BREAKOUT_SUPERCHARGE_GAIN_FOCUS : 0)) * getBreakoutComboScale(next.comboMultiplier) +
+      (baseSuperchargeGain + (focusPerfect ? BREAKOUT_SUPERCHARGE_GAIN_FOCUS : 0)) *
+        getBreakoutComboScale(next.comboMultiplier) *
+        (isOverdrive ? 1.1 : 1) +
         (shattered ? SHATTER_SUPERCHARGE_GAIN : 0),
     )
     const qualityGain =
       (perfect ? BREAKOUT_QUALITY_GAIN_PERFECT : BREAKOUT_QUALITY_GAIN_GOOD) +
       (focusPerfect ? 4 : 0) +
+      Math.min(5, streak - 1) +
       (shattered ? BREAKOUT_QUALITY_GAIN_PERFECT : 0)
     const breakoutQualityScore = Math.min(
       BREAKOUT_QUALITY_MAX,
@@ -657,17 +819,18 @@ function resolveResistanceTap(
     // its own fountain beat — it's rarer and earns the extra fanfare.
     if (shattered) {
       next = pushFountain(next, 'SHATTERED', 'shatter')
+      next = spawnBonusTarget(next, now)
     } else if (focusPerfect) {
-      next = pushFountain(next, 'FOCUS PERFECT', 'breakout')
+      next = pushFountain(next, 'PERFECT CRACK', 'breakout')
     } else if (perfect) {
-      next = pushFountain(next, 'BREAKOUT PERFECT', 'breakout')
+      next = pushFountain(next, 'PERFECT CRACK', 'breakout')
     }
     return {
       next,
       rating: perfect ? 'perfect' : 'good',
-      breakoutReward: { chain: streak, superchargeGain, curvePercent, shattered, focusPerfect },
+      breakoutReward: { chain: streak, crackStreak: streak, superchargeGain, curvePercent, shattered, focusPerfect },
       superchargeNote: null,
-      timingLabel: perfect ? 'PERFECT' : 'CLEAN',
+      timingLabel: shattered ? 'SHATTERED' : perfect ? 'PERFECT CRACK' : crackPips === 1 ? 'ONE MORE' : 'CRACK HIT',
     }
   }
 
@@ -690,6 +853,8 @@ function resolveResistanceTap(
         phaseUntil: now + RESISTANCE_OVERHEAT_HOLD_MS,
         windowUntil: 0,
         crossedAt: 0,
+        breakoutStreak: 0,
+        crackHitStreak: 0,
         focusStartedAt: 0,
         lastRating: 'overheated',
       },
@@ -705,22 +870,18 @@ function resolveResistanceTap(
   }
 
   if (outcome === 'rejected') {
-    if (isOverdrive) {
-      return { next: state, rating: null, breakoutReward: null, superchargeNote: null, timingLabel: null }
-    }
-
     // Pushed above the line without a clean hit: a red rejection candle, a heat
     // spike, and chain damage — one miss stings but never ends the run.
     // v0.4C: also drains banked Supercharge and breakout-quality standing — a
     // mistimed smash should visibly cost the Overdrive route, not just the combo.
-    const combo = Math.floor(state.combo / 2)
+    const combo = isOverdrive ? state.combo : Math.floor(state.combo / 2)
     let next: GameState = {
       ...state,
       combo,
       comboMultiplier: getComboMultiplier(combo),
-      supercharge: Math.max(0, state.supercharge - SUPERCHARGE_REJECT_LOSS),
+      supercharge: isOverdrive ? state.supercharge : Math.max(0, state.supercharge - SUPERCHARGE_REJECT_LOSS),
       breakoutQualityScore: Math.max(0, state.breakoutQualityScore - BREAKOUT_QUALITY_LOSS),
-      resources: { ...state.resources, heat: state.resources.heat + 4 },
+      resources: { ...state.resources, heat: state.resources.heat + (isOverdrive ? 0 : 4) },
       resistance: {
         ...state.resistance,
         phase: 'rejected',
@@ -728,6 +889,7 @@ function resolveResistanceTap(
         windowUntil: 0,
         crossedAt: 0,
         breakoutStreak: 0,
+        crackHitStreak: 0,
         rejections: state.resistance.rejections + 1,
         crackPips: Math.min(RESISTANCE_MAX_CRACK_PIPS, state.resistance.crackPips + 1),
         focusStartedAt: 0,
@@ -735,7 +897,7 @@ function resolveResistanceTap(
         aboveSinceMs: 0,
       },
     }
-    next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: 14 }, now)
+    next = advanceChartState(next, CHART_TAP_STEP, { jeetDump: isOverdrive ? 6 : 14 }, now)
     next = pushFountain(next, 'REJECTED', 'reject')
     return {
       next,
@@ -750,7 +912,8 @@ function resolveResistanceTap(
   // and no combat text — the button already reads BUILD MOMENTUM here. v0.4C: a
   // tiny Supercharge trickle still applies (see sendCandle), just not enough to
   // matter on its own.
-  const repeatedPunishmentTap = state.resistance.phase === 'overheated' || state.resistance.phase === 'rejected'
+  const repeatedPunishmentTap =
+    state.resistance.phase === 'overheated' || state.resistance.phase === 'rejected' || state.resistance.phase === 'missed'
   const timingLabel = isOverdrive
     ? null
     : repeatedPunishmentTap
@@ -803,13 +966,13 @@ function sendCandle(state: GameState, now: number): GameState {
   const critChance = (wasDecaying ? 0.18 : 0.12) + comboCritBonus + (isOverdrive ? OVERDRIVE_CRIT_BONUS : 0)
   const isCrit = deterministicRoll(tapId * 2.71 + state.prestigeCount * 3.77) < critChance
 
-  // v0.4B Focus + Spam Punishment: read against the PRE-tap resistance/chart state
-  // (before this tap's own impulse moves anything) so the rating reflects timing,
-  // not the tap's own effect. Overdrive bypasses this entirely — mashing there
-  // stays consequence-free, per its existing contract.
+  // v0.4B/v0.4F: read against the PRE-tap resistance/chart state (before this
+  // tap's own impulse moves anything) so the rating reflects timing, not the
+  // tap's own effect. Overdrive still gets heat immunity, but it no longer
+  // deletes timing/crack targeting.
   const preTapOverheated = state.chart.heat > OVERHEAT && !isOverdrive
-  const tapRating = isOverdrive ? null : classifyTapRating(state.resistance, state.chart, now, preTapOverheated)
-  const wasFocusReady = !isOverdrive && isResistanceFocusReady(state.resistance, now)
+  const tapRating = classifyTapRating(state.resistance, state.chart, now, preTapOverheated)
+  const wasFocusReady = isResistanceFocusReady(state.resistance, now)
   const wasSmash = state.resistance.phase === 'smash'
   const rewardScale = getTapRatingRewardScale(tapRating)
   const heatRatingScale = getTapRatingHeatScale(tapRating)
@@ -863,13 +1026,14 @@ function sendCandle(state: GameState, now: number): GameState {
       heatAdd: (CHART_HEAT_PER_TAP + (isCrit ? 4 : 0)) * heatRatingScale,
       heatScale,
       noReversal: isOverdrive,
-      frictionScale: getChartFrictionScale(comboMultiplier),
-      gravityScale: getChartGravityScale(next) * getResistancePhaseGravityScale(next.resistance.phase),
+      frictionScale: getChartFrictionScale(comboMultiplier) * (isOverdrive ? 0.72 : 1),
+      gravityScale: getChartGravityScale(next) * getResistancePhaseGravityScale(next.resistance.phase) * (isOverdrive ? 0.72 : 1),
     },
     now,
   )
 
   next = awardLiquidity(next, walletGain, curveGain)
+  next = resolveBonusTarget(next, now, isOverdrive)
 
   // v0.4A Resistance Breakout: classify the tap against the (post-impulse) line
   // and stamp the matching arcade beat — breakout pop, rejection dump, or scold.
@@ -898,11 +1062,14 @@ function sendCandle(state: GameState, now: number): GameState {
   // so this catches every repeat tap during the freeze, not just the one that
   // triggered it) reads as a "fizzle" — small, unmistakably worse, no loud combat
   // text (that already fired once on the tap that tripped the hold).
-  const repeatedPunishmentTap = state.resistance.phase === 'overheated' || state.resistance.phase === 'rejected'
+  const repeatedPunishmentTap =
+    state.resistance.phase === 'overheated' || state.resistance.phase === 'rejected' || state.resistance.phase === 'missed'
   const microRoll = deterministicRoll(tapId * 7.13 + state.prestigeCount * 3.01)
   const microLine = repeatedPunishmentTap
     ? state.resistance.phase === 'overheated'
       ? 'FIZZLE — LET IT BREATHE'
+      : state.resistance.phase === 'missed'
+        ? 'FIZZLE — AIM THE CRACK'
       : 'FIZZLE — MISTIMED'
     : isCrit
       ? 'CRITICAL CANDLE'
@@ -1100,7 +1267,8 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
     { ...state, idleTicks },
     dtSeconds,
     {
-      gravityScale: getChartGravityScale(state) * getResistancePhaseGravityScale(prevPhase),
+      gravityScale: getChartGravityScale(state) * getResistancePhaseGravityScale(prevPhase) * (overdriveActive ? 0.72 : 1),
+      frictionScale: overdriveActive ? 0.74 : 1,
       autoImpulse: getChartAutoImpulse(state),
       heatScale: overdriveActive ? 0 : 1,
       noReversal: overdriveActive,
@@ -1109,8 +1277,9 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
     now,
     {
       focusCanBuild: true,
-      heatSafe: !overdriveActive && state.chart.heat <= OVERHEAT,
+      heatSafe: overdriveActive || state.chart.heat <= OVERHEAT,
       lastTapAt: state.lastTapAt,
+      overdriveActive,
     },
   )
 
@@ -1134,6 +1303,8 @@ function applyChartGravity(state: GameState, now: number, dtSeconds: number): Ga
       'REJECTED — the chart floated too high. Let it breathe.',
     )
   }
+
+  withChart = resolveBonusTarget(withChart, now, overdriveActive)
 
   // Never drift while onboarding (the prestige/graduation modal only opens at
   // 100% where the curve floor already prevents any decay). v0.3.2: the

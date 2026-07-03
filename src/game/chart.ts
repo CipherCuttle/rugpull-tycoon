@@ -39,24 +39,24 @@ export interface ChartState {
 }
 
 // --- Physics constants (price units on the 0–100 scale) ---
-const HARD_MIN = 4
-const HARD_MAX = 96
+const HARD_MIN = -4
+const HARD_MAX = 104
 // Soft band: outside it, restoring forces kick in so the price wicks back.
-const SOFT_MIN = 24
-const SOFT_MAX = 70
+const SOFT_MIN = 18
+const SOFT_MAX = 76
 // Constant downward pull on velocity (price/s^2). Terminal idle fall ≈
 // BASE_GRAVITY / FRICTION ≈ 12/s, so idle drop is obvious within a second.
-const BASE_GRAVITY = 24
+const BASE_GRAVITY = 23
 // Extra downward pull per price-unit above SOFT_MAX — the anti-pinning force.
-const HIGH_PRESSURE_K = 2.1
+const HIGH_PRESSURE_K = 1.75
 // Upward bounce per price-unit below SOFT_MIN — dead coins rest around the Dead/
 // Warming band (~18–24) instead of pinning to the absolute floor. Stiff enough
 // to balance gravity a little below SOFT_MIN.
-const LOW_BOUNCE_K = 4.5
+const LOW_BOUNCE_K = 3.8
 // Velocity damping per second. Lowish so taps carry momentum (surf) and idle
 // falls at a lively terminal speed.
-const FRICTION = 2.0
-const VELOCITY_MAX = 58
+const FRICTION = 1.9
+const VELOCITY_MAX = 66
 // Random velocity jitter per second — what turns the line into candles.
 const NOISE_AMP = 27
 
@@ -107,9 +107,17 @@ export const RESISTANCE_APPROACH_BAND = 20
 // Transient event beats: how long broken/rejected/overheated hold before the next
 // target spawns.
 export const RESISTANCE_BROKEN_HOLD_MS = 620
+export const RESISTANCE_MISSED_HOLD_MS = 520
 export const RESISTANCE_REJECTED_HOLD_MS = 760
 export const RESISTANCE_OVERHEAT_HOLD_MS = 560
 export const RESISTANCE_MAX_CRACK_PIPS = 3
+export const RESISTANCE_CRACK_ALIGN_BAND = 3.7
+export const RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE = 7.4
+export const RESISTANCE_CRACK_TRAJECTORY_BAND = 0.18
+export const RESISTANCE_CRACK_TRAJECTORY_BAND_OVERDRIVE = 0.32
+const RESISTANCE_CRACK_TARGET_MIN_POS = 0.16
+const RESISTANCE_CRACK_TARGET_MAX_POS = 0.82
+const RESISTANCE_CRACK_TARGET_MAX_OFFSET = 7.6
 export const RESISTANCE_FOCUS_BAND = RESISTANCE_NEAR_BAND + 2
 export const RESISTANCE_FOCUS_START_MS = 300
 export const RESISTANCE_FOCUS_READY_MS = 650
@@ -133,6 +141,7 @@ interface ResistanceAdvanceOpts {
   focusCanBuild?: boolean
   heatSafe?: boolean
   lastTapAt?: number
+  overdriveActive?: boolean
 }
 
 function roll(seed: number): number {
@@ -154,12 +163,80 @@ function clamp(value: number, min: number, max: number): number {
 // the line was spawning far enough out that a deliberate (non-spam) tap rhythm
 // struggled to close the gap before losing momentum to gravity.
 function resistanceSpawnPrice(anchorPrice: number, id: number): number {
-  const spacing = 8 + roll(id * 17.19 + anchorPrice * 0.37) * 5
-  return round(clamp(anchorPrice + spacing, 40, 80))
+  const spacing = 9 + roll(id * 17.19 + anchorPrice * 0.37) * 5
+  return round(clamp(anchorPrice + spacing, 40, 84))
+}
+
+function pickCrackTarget(
+  basePrice: number,
+  id: number,
+  seq: number,
+  avoidPos?: number,
+): Pick<ResistanceState, 'crackTargetPos' | 'crackTargetPriceOffset'> {
+  const span = RESISTANCE_CRACK_TARGET_MAX_POS - RESISTANCE_CRACK_TARGET_MIN_POS
+  let pos = RESISTANCE_CRACK_TARGET_MIN_POS + roll(id * 41.7 + seq * 19.3 + basePrice * 0.11) * span
+
+  if (typeof avoidPos === 'number' && Math.abs(pos - avoidPos) < 0.16) {
+    pos = RESISTANCE_CRACK_TARGET_MIN_POS + ((pos - RESISTANCE_CRACK_TARGET_MIN_POS + 0.31) % span)
+  }
+
+  let offset = (roll(id * 53.9 + seq * 23.1 + basePrice * 0.17) - 0.5) * 2 * RESISTANCE_CRACK_TARGET_MAX_OFFSET
+  if (Math.abs(offset) < 2.4) {
+    offset = offset < 0 ? -2.4 : 2.4
+  }
+
+  const targetPrice = clamp(basePrice + offset, 28, 94)
+
+  return {
+    crackTargetPos: round(pos),
+    crackTargetPriceOffset: round(targetPrice - basePrice),
+  }
+}
+
+export function moveResistanceCrackTarget(resistance: ResistanceState): ResistanceState {
+  const crackTargetSeq = resistance.crackTargetSeq + 1
+  return {
+    ...resistance,
+    ...pickCrackTarget(resistance.price, resistance.id, crackTargetSeq, resistance.crackTargetPos),
+    crackTargetSeq,
+  }
+}
+
+export function getResistanceCrackPrice(resistance: ResistanceState): number {
+  return round(clamp(resistance.price + (resistance.crackTargetPriceOffset ?? 0), 28, 94))
+}
+
+export function getResistanceCrackBand(overdriveActive = false): number {
+  return overdriveActive ? RESISTANCE_CRACK_ALIGN_BAND_OVERDRIVE : RESISTANCE_CRACK_ALIGN_BAND
+}
+
+export function getResistanceCrackAlignmentDistance(resistance: ResistanceState, chart: ChartState): number {
+  return Math.abs(getResistanceCrackPrice(resistance) - chart.price)
+}
+
+export function getChartTrajectoryPos(chart: ChartState): number {
+  return round(clamp(0.5 + chart.velocity / 120, 0.12, 0.88))
+}
+
+export function getResistanceCrackTrajectoryDistance(resistance: ResistanceState, chart: ChartState): number {
+  return Math.abs((resistance.crackTargetPos ?? 0.7) - getChartTrajectoryPos(chart))
+}
+
+export function isResistanceCrackAligned(
+  resistance: ResistanceState,
+  chart: ChartState,
+  overdriveActive = false,
+): boolean {
+  const trajectoryBand = overdriveActive ? RESISTANCE_CRACK_TRAJECTORY_BAND_OVERDRIVE : RESISTANCE_CRACK_TRAJECTORY_BAND
+  return (
+    getResistanceCrackAlignmentDistance(resistance, chart) <= getResistanceCrackBand(overdriveActive) &&
+    getResistanceCrackTrajectoryDistance(resistance, chart) <= trajectoryBand
+  )
 }
 
 export function createInitialResistance(anchorPrice: number, id = 1): ResistanceState {
   const price = resistanceSpawnPrice(anchorPrice, id)
+  const crackTarget = pickCrackTarget(price, id, 0)
   return {
     id,
     price,
@@ -170,6 +247,9 @@ export function createInitialResistance(anchorPrice: number, id = 1): Resistance
     perfectBreakouts: 0,
     rejections: 0,
     crackPips: RESISTANCE_MAX_CRACK_PIPS,
+    ...crackTarget,
+    crackTargetSeq: 0,
+    crackHitStreak: 0,
     focusStartedAt: 0,
     phase: anchorPrice >= price - RESISTANCE_APPROACH_BAND ? 'approaching' : 'waiting',
     phaseUntil: 0,
@@ -180,12 +260,13 @@ export function createInitialResistance(anchorPrice: number, id = 1): Resistance
 
 // Spawn the successor target after a break/reject beat, carrying the run-long
 // tallies (streak/perfect/rejections) and the last rating forward.
-function respawnResistance(prev: ResistanceState, chart: ChartState): ResistanceState {
+function respawnResistance(prev: ResistanceState, chart: ChartState, carryStreak = true): ResistanceState {
   const fresh = createInitialResistance(chart.price, prev.id + 1)
   return {
     ...fresh,
     lastResistanceHitAt: prev.lastResistanceHitAt,
-    breakoutStreak: prev.breakoutStreak,
+    breakoutStreak: carryStreak ? prev.breakoutStreak : 0,
+    crackHitStreak: carryStreak ? prev.crackHitStreak : 0,
     perfectBreakouts: prev.perfectBreakouts,
     rejections: prev.rejections,
     lastRating: prev.lastRating,
@@ -236,6 +317,7 @@ export function advanceResistance(
   // new target; ordinary cracks keep working the same wall with its remaining pips.
   if (
     live.phase === 'broken' ||
+    live.phase === 'missed' ||
     live.phase === 'rejected' ||
     live.phase === 'overheated' ||
     live.phase === 'shattered'
@@ -244,7 +326,7 @@ export function advanceResistance(
       if (live.phase === 'shattered') {
         return respawnResistance(live, chart)
       }
-      live = clearTransientBeat(live)
+      live = live.phase === 'broken' ? moveResistanceCrackTarget(clearTransientBeat(live)) : clearTransientBeat(live)
     } else {
       return live
     }
@@ -253,14 +335,14 @@ export function advanceResistance(
   // Chart crashed far below the line (e.g. a jeet dump): bring a nearer target
   // down rather than waiting on the slow drift.
   if (now > 0 && chart.price < live.price - RESISTANCE_FAR_BELOW) {
-    return respawnResistance(live, chart)
+    return respawnResistance(live, chart, false)
   }
 
   // A live line drifts down toward a chart stalled below it so it stays reachable.
   // v0.4D: the hold band widened from 5 → RESISTANCE_DRIFT_HOLD_BAND so the line
   // goes fully stationary as soon as the chart is genuinely close, instead of
   // still creeping while the player is trying to hold station near it.
-  const driftFloor = Math.min(80, Math.max(40, chart.price + 9))
+  const driftFloor = Math.min(84, Math.max(40, chart.price + 10))
   const driftedPrice =
     chart.price < live.price - RESISTANCE_DRIFT_HOLD_BAND
       ? Math.max(driftFloor, live.price - RESISTANCE_DRIFT_PER_SEC * dt)
@@ -288,6 +370,7 @@ export function advanceResistance(
       phaseUntil: now + RESISTANCE_REJECTED_HOLD_MS,
       rejections: live.rejections + 1,
       breakoutStreak: 0,
+      crackHitStreak: 0,
       crackPips: Math.min(RESISTANCE_MAX_CRACK_PIPS, live.crackPips + 1),
       focusStartedAt: 0,
       lastRating: 'rejected',
@@ -310,18 +393,20 @@ export function advanceResistance(
   const phase = derivePhase(distance, nowWindowActive)
   const focusPhase = phase === 'approaching' || phase === 'smash'
   const nearEnoughForFocus = distance <= RESISTANCE_FOCUS_BAND && distance >= -RESISTANCE_PERFECT_ABOVE
-  const quietMs = opts.lastTapAt && opts.lastTapAt > 0 ? now - opts.lastTapAt : RESISTANCE_FOCUS_START_MS
+  const focusStartMs = opts.overdriveActive ? 120 : RESISTANCE_FOCUS_START_MS
+  const focusBackdateMs = opts.overdriveActive ? RESISTANCE_FOCUS_READY_MS - 180 : RESISTANCE_FOCUS_START_MS
+  const quietMs = opts.lastTapAt && opts.lastTapAt > 0 ? now - opts.lastTapAt : focusStartMs
   const canBuildFocus =
     now > 0 &&
     opts.focusCanBuild === true &&
     opts.heatSafe === true &&
     focusPhase &&
     nearEnoughForFocus &&
-    quietMs >= RESISTANCE_FOCUS_START_MS
+    quietMs >= focusStartMs
   const focusStartedAt = canBuildFocus
     ? live.focusStartedAt > 0
       ? live.focusStartedAt
-      : Math.max(1, now - RESISTANCE_FOCUS_START_MS)
+      : Math.max(1, now - focusBackdateMs)
     : 0
 
   return {
@@ -353,7 +438,7 @@ export function classifyTapRating(
     return 'rejected'
   }
 
-  if (resistance.phase === 'broken' || resistance.phase === 'shattered') {
+  if (resistance.phase === 'broken' || resistance.phase === 'missed' || resistance.phase === 'shattered') {
     return 'weak'
   }
 
@@ -394,6 +479,7 @@ export function resolveBreakoutTap(
   // handled separately via the pre-tap rating scale in the reducer.
   if (
     resistance.phase === 'broken' ||
+    resistance.phase === 'missed' ||
     resistance.phase === 'rejected' ||
     resistance.phase === 'overheated' ||
     resistance.phase === 'shattered'

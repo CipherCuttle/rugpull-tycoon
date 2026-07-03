@@ -511,7 +511,7 @@ h2 {
 .fake-chart {
   display: block;
   width: 100%;
-  height: 168px;
+  height: 196px;
   margin-top: 4px;
   background:
     linear-gradient(90deg, transparent 0 24px, rgba(70, 255, 155, 0.04) 24px 25px, transparent 25px 48px),
@@ -1607,7 +1607,9 @@ h2 {
 }
 
 .chart-resistance-line {
+  fill: none;
   stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .chart-resistance-line.halo {
@@ -1650,6 +1652,16 @@ h2 {
   animation: resistance-line-shatter 500ms ease-out forwards;
 }
 
+.chart-resistance-target.resistance-missed .chart-resistance-line.core {
+  stroke: var(--red-2);
+  stroke-dasharray: 3 5;
+  filter: drop-shadow(0 0 8px rgba(255, 59, 82, 0.7));
+}
+
+.chart-resistance-target.resistance-missed .chart-resistance-line.halo {
+  stroke: rgba(255, 59, 82, 0.22);
+}
+
 .chart-resistance-target.resistance-shattered .chart-resistance-line.core {
   stroke: #fff;
   stroke-dasharray: 2 5;
@@ -1689,6 +1701,69 @@ h2 {
   animation: resistance-burst-shatter 900ms ease-out forwards;
 }
 
+.chart-crack-target {
+  transform-box: fill-box;
+  transform-origin: center;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.72)) drop-shadow(0 0 12px rgba(255, 194, 58, 0.5));
+}
+
+.chart-crack-band {
+  fill: rgba(255, 194, 58, 0.13);
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.chart-crack-core {
+  fill: #fff7b8;
+  stroke: var(--amber);
+  stroke-width: 1.4;
+}
+
+.chart-crack-notch {
+  fill: none;
+  stroke: #120b02;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-crack-target.ready {
+  animation: crack-target-pulse 320ms ease-in-out infinite;
+}
+
+.chart-crack-target.ready .chart-crack-band,
+.chart-crack-target.overdrive .chart-crack-band {
+  fill: rgba(255, 255, 255, 0.17);
+  stroke: rgba(255, 255, 255, 0.72);
+}
+
+.chart-crack-target.overdrive .chart-crack-core {
+  fill: #fff;
+  stroke: var(--acid-2);
+}
+
+.chart-bonus-target {
+  filter: drop-shadow(0 0 8px rgba(70, 224, 255, 0.78)) drop-shadow(0 0 14px rgba(182, 255, 74, 0.46));
+  animation: bonus-target-float 620ms ease-in-out infinite;
+}
+
+.chart-bonus-ring {
+  fill: rgba(70, 224, 255, 0.12);
+  stroke: rgba(182, 255, 74, 0.9);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 3;
+}
+
+.chart-bonus-core {
+  fill: var(--cyan);
+}
+
+.chart-bonus-spark {
+  fill: rgba(182, 255, 74, 0.8);
+  opacity: 0.56;
+}
+
 /* v0.4A: the header's primary teaching cue — short action words per phase. This
    replaces the old debug "RESISTANCE n · PRICE n" readout (now dev-only). */
 .resistance-cue {
@@ -1715,6 +1790,11 @@ h2 {
 .resistance-cue.resistance-broken {
   color: var(--acid);
   text-shadow: 0 0 12px rgba(70, 255, 155, 0.75);
+}
+
+.resistance-cue.resistance-missed {
+  color: var(--red-2);
+  text-shadow: 0 0 10px rgba(255, 59, 82, 0.7);
 }
 
 .resistance-cue.resistance-shattered {
@@ -1780,6 +1860,15 @@ h2 {
 .hero-chart.breakout-perfect {
   border-color: rgba(255, 194, 58, 0.92);
   box-shadow: var(--shadow), 0 0 40px rgba(255, 194, 58, 0.36), inset 0 0 28px rgba(70, 255, 155, 0.12);
+}
+
+.hero-chart.missed-crack {
+  border-color: rgba(255, 107, 82, 0.8);
+  box-shadow: var(--shadow), 0 0 28px rgba(255, 59, 82, 0.26), inset 0 0 18px rgba(255, 59, 82, 0.08);
+}
+
+.hero-chart.missed-crack .fake-chart {
+  animation: reject-shake 220ms ease-out;
 }
 
 .hero-chart.shattered {
@@ -2653,6 +2742,28 @@ h2 {
   }
 }
 
+@keyframes crack-target-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.18);
+  }
+}
+
+@keyframes bonus-target-float {
+  0%,
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 0.86;
+  }
+  50% {
+    transform: scale(1.12) rotate(8deg);
+    opacity: 1;
+  }
+}
+
 @keyframes reject-shake {
   0%,
   100% {
@@ -2947,15 +3058,19 @@ h2 {
   .chart-active-tip.ready circle:first-child,
   .hero-chart.breakout-perfect .fake-chart,
   .hero-chart.breakout .fake-chart,
+  .hero-chart.missed-crack .fake-chart,
   .hero-chart.shattered,
   .hero-chart.shattered .fake-chart,
   .hero-chart.resistance-rejected .fake-chart,
   .resistance-cue.resistance-smash,
   .chart-resistance-target.resistance-approaching .chart-resistance-line.core,
   .chart-resistance-target.resistance-broken .chart-resistance-line,
+  .chart-resistance-target.resistance-missed .chart-resistance-line,
   .chart-resistance-target.resistance-shattered .chart-resistance-line,
   .chart-resistance-burst,
   .chart-resistance-burst.shatter,
+  .chart-crack-target.ready,
+  .chart-bonus-target,
   .main-action.breakout-ready,
   .main-action.breakout-rejected,
   .main-action.shattered,

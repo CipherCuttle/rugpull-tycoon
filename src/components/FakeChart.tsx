@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { OVERHEAT, RESISTANCE_MAX_CRACK_PIPS, type Candle, type ChartState } from '../game/chart'
+import {
+  getResistanceCrackBand,
+  getResistanceCrackPrice,
+  OVERHEAT,
+  RESISTANCE_MAX_CRACK_PIPS,
+  type Candle,
+  type ChartState,
+} from '../game/chart'
 import { getSurfZone, getTierFloor } from '../game/economy'
-import type { FountainEvent, ResistanceState, TapEffect } from '../game/types'
+import type { BonusTarget, FountainEvent, ResistanceState, TapEffect } from '../game/types'
 import { StreakFountain } from './StreakFountain'
 
 interface FakeChartProps {
@@ -11,6 +18,7 @@ interface FakeChartProps {
   milestoneLabel: string
   tapEffect: TapEffect | null
   resistance: ResistanceState
+  bonusTarget: BonusTarget | null
   isDecaying: boolean
   // v0.3.5: streak-mastery aura states (visual only).
   supercharged: boolean
@@ -25,11 +33,14 @@ const TAP_FLASH_MS = 220
 const MILESTONE_PULSE_MS = 750
 
 const WIDTH = 360
-const HEIGHT = 150
+const HEIGHT = 184
+const DISPLAY_MIN = -6
+const DISPLAY_MAX = 106
 
 // price (0–100) → svg y (inverted).
 function priceToY(price: number): number {
-  return HEIGHT - (Math.max(0, Math.min(100, price)) / 100) * HEIGHT
+  const clamped = Math.max(DISPLAY_MIN, Math.min(DISPLAY_MAX, price))
+  return HEIGHT - ((clamped - DISPLAY_MIN) / (DISPLAY_MAX - DISPLAY_MIN)) * HEIGHT
 }
 
 export function FakeChart({
@@ -39,6 +50,7 @@ export function FakeChart({
   milestoneLabel,
   tapEffect,
   resistance,
+  bonusTarget,
   isDecaying,
   supercharged,
   overdrive,
@@ -98,6 +110,7 @@ export function FakeChart({
   const phase = resistance.phase
   const smash = phase === 'smash'
   const broken = phase === 'broken'
+  const missed = phase === 'missed'
   const shattered = phase === 'shattered'
   const brokenPerfect = (broken || shattered) && resistance.lastRating === 'perfect'
   const rejected = phase === 'rejected' || phase === 'overheated'
@@ -107,7 +120,7 @@ export function FakeChart({
   // text — it lives in the header row (above the SVG, never over the resistance
   // line) and just updates in place as the breakout streak climbs, with flame
   // styling kicking in at higher tiers instead of another burst of text.
-  const breakoutStreak = resistance.breakoutStreak
+  const breakoutStreak = resistance.crackHitStreak
   const comboTier = shattered
     ? 'shatter'
     : overdrive
@@ -119,15 +132,17 @@ export function FakeChart({
           : breakoutStreak === 3
             ? 'tier-2'
             : 'tier-1'
-  const comboBadgeText = shattered ? 'SHATTER' : overdrive ? 'OVERDRIVE' : breakoutStreak >= 2 ? `×${breakoutStreak}` : null
+  const comboBadgeText = shattered ? 'SHATTER' : overdrive ? 'OVERDRIVE' : breakoutStreak >= 2 ? `CRACK ×${breakoutStreak}` : null
 
   // Short action words — the player-facing teaching cue. Numbers live in dev stats.
   const cue = shattered
     ? 'SHATTERED'
     : broken
     ? brokenPerfect
-      ? 'BREAKOUT PERFECT'
-      : 'BREAKOUT'
+      ? 'PERFECT CRACK'
+      : 'CRACK HIT'
+    : missed
+      ? 'MISSED CRACK'
     : phase === 'rejected'
       ? 'REJECTED'
       : phase === 'overheated'
@@ -152,6 +167,17 @@ export function FakeChart({
   const resistanceY = priceToY(resistance.price)
   const segmentX = WIDTH * 0.56
   const segmentWidth = WIDTH - segmentX - 8
+  const segmentEndX = WIDTH - 8
+  const crackPos = Math.max(0.12, Math.min(0.88, resistance.crackTargetPos ?? 0.7))
+  const crackX = segmentX + segmentWidth * crackPos
+  const crackY = priceToY(getResistanceCrackPrice(resistance))
+  const crackBandPx = Math.max(7, (getResistanceCrackBand(overdrive) / (DISPLAY_MAX - DISPLAY_MIN)) * HEIGHT)
+  const resistancePath = `M ${segmentX} ${resistanceY} Q ${(segmentX + crackX) / 2} ${resistanceY} ${crackX} ${crackY} Q ${
+    (crackX + segmentEndX) / 2
+  } ${resistanceY} ${segmentEndX} ${resistanceY}`
+  const bonusVisible = bonusTarget && Date.now() < bonusTarget.expiresAt
+  const bonusX = bonusVisible ? Math.max(24, Math.min(WIDTH - 24, bonusTarget.xPos * WIDTH)) : 0
+  const bonusY = bonusVisible ? priceToY(bonusTarget.price) : 0
 
   return (
     <section
@@ -161,15 +187,16 @@ export function FakeChart({
         overheated ? 'overheated' : ''
       } ${supercharged ? 'supercharged' : ''} ${overdrive ? 'overdrive' : ''} ${smash ? 'smash-window' : ''} ${
         approaching ? 'resistance-close' : ''
-      } ${broken ? 'breakout' : ''} ${shattered ? 'shattered' : ''} ${brokenPerfect ? 'breakout-perfect' : ''} ${
-        rejected ? 'resistance-rejected' : ''
+      } ${broken ? 'breakout' : ''} ${missed ? 'missed-crack' : ''} ${shattered ? 'shattered' : ''} ${
+        brokenPerfect ? 'breakout-perfect' : ''
+      } ${rejected ? 'resistance-rejected' : ''
       }`}
       aria-label="Fake chart"
     >
       {gravityFlag ? <span className={`chart-gravity-flag ${gravityFlagKind}`}>{gravityFlag}</span> : null}
       {/* v0.3.5: Overdrive overrides the overheat scold — mashing is safe here. */}
       {overheated && !overdrive ? <span className="chart-overheat-flag">OVERHEATED — LET IT BREATHE</span> : null}
-      {overdrive ? <span className="chart-overdrive-flag">OVERDRIVE — GRAVITY HAS LEFT THE CHAT</span> : null}
+      {overdrive ? <span className="chart-overdrive-flag">OVERDRIVE — CRACKS WIDE OPEN</span> : null}
       <div className="chart-header">
         <div className="chart-header-left">
           <span className={`resistance-cue resistance-${phase}`}>{cue}</span>
@@ -181,22 +208,29 @@ export function FakeChart({
           </span>
         </div>
         {comboBadgeText ? <span className={`combo-badge ${comboTier}`}>{comboBadgeText}</span> : null}
-        <strong className={isUp ? 'chart-up' : 'chart-down'}>{shattered ? 'SHATTER' : smash ? 'SMASH' : isUp ? 'UP ONLY' : 'DUMPING'}</strong>
+        <strong className={isUp ? 'chart-up' : 'chart-down'}>{shattered ? 'SHATTER' : missed ? 'MISS' : smash ? 'AIM' : isUp ? 'UP ONLY' : 'DUMPING'}</strong>
       </div>
       <svg className="fake-chart" viewBox={`0 0 ${WIDTH} ${HEIGHT}`} role="img" aria-label="Fictional candlestick chart">
         <g className={`chart-resistance-target resistance-${phase}`} aria-hidden="true">
           {smash ? (
             <rect
               className="chart-smash-window"
-              x={segmentX - 8}
-              y={Math.max(0, resistanceY - 10)}
-              width={segmentWidth + 16}
-              height={20}
+              x={Math.max(segmentX - 6, crackX - (overdrive ? 25 : 18))}
+              y={Math.max(0, crackY - crackBandPx - 3)}
+              width={overdrive ? 50 : 36}
+              height={crackBandPx * 2 + 6}
               rx={4}
             />
           ) : null}
-          <line className="chart-resistance-line halo" x1={segmentX} x2={WIDTH - 8} y1={resistanceY} y2={resistanceY} />
-          <line className="chart-resistance-line core" x1={segmentX} x2={WIDTH - 8} y1={resistanceY} y2={resistanceY} />
+          <path className="chart-resistance-line halo" d={resistancePath} />
+          <path className="chart-resistance-line core" d={resistancePath} />
+          {!shattered && !rejected ? (
+            <g className={`chart-crack-target ${smash ? 'ready' : ''} ${overdrive ? 'overdrive' : ''}`} transform={`translate(${crackX} ${crackY})`}>
+              <circle className="chart-crack-band" r={crackBandPx} />
+              <circle className="chart-crack-core" r={5.4} />
+              <path className="chart-crack-notch" d="M -7 -8 L -1 -1 L -6 8 M 4 -8 L 0 0 L 8 7" />
+            </g>
+          ) : null}
           {/* v0.4A: on a breakout the line shatters — an expanding burst ring at the
               break point (keyed by target id so entering 'broken' mounts a fresh,
               one-shot animation) rides on top of the fading line. */}
@@ -204,8 +238,8 @@ export function FakeChart({
             <circle
               key={`burst-${resistance.id}-${phase}`}
               className={`chart-resistance-burst ${shattered ? 'shatter' : ''}`}
-              cx={Math.min(WIDTH - 12, currentCx)}
-              cy={resistanceY}
+              cx={crackX}
+              cy={crackY}
               r={6}
             />
           ) : (
@@ -237,6 +271,13 @@ export function FakeChart({
             </g>
           )
         })}
+        {bonusVisible ? (
+          <g className="chart-bonus-target" transform={`translate(${bonusX} ${bonusY})`} aria-hidden="true">
+            <circle className="chart-bonus-ring" r="9" />
+            <circle className="chart-bonus-core" r="3.5" />
+            <path className="chart-bonus-spark" d="M 0 -13 L 2 -4 L 10 -7 L 4 0 L 11 5 L 2 4 L 0 13 L -2 4 L -11 5 L -4 0 L -10 -7 L -2 -4 Z" />
+          </g>
+        ) : null}
         <g className={`chart-active-tip ${smash ? 'ready' : ''}`} aria-hidden="true">
           <circle cx={currentCx} cy={currentCy} r="5.8" />
           <circle cx={currentCx} cy={currentCy} r="2.5" />

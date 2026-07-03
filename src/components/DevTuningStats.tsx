@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { classifyTapRating, getResistanceFocusMs, isResistanceFocusReady, OVERHEAT } from '../game/chart'
+import {
+  classifyTapRating,
+  getChartTrajectoryPos,
+  getResistanceCrackPrice,
+  getResistanceFocusMs,
+  isResistanceFocusReady,
+  OVERHEAT,
+} from '../game/chart'
 import {
   BREAKOUT_QUALITY_ARM_THRESHOLD,
   getBondingCurveDelta,
@@ -113,13 +120,19 @@ export function DevTuningStats({ state }: DevTuningStatsProps) {
             phase: {state.resistance.phase} · last {state.resistance.lastRating ?? '—'} · preview {tapPreview}
           </div>
           <div>
-            pips {state.resistance.crackPips} · focus {Math.round(focusMs)}ms {focusReady ? 'READY' : ''}
+            pips {state.resistance.crackPips} · crack {state.resistance.crackTargetPos.toFixed(2)} @
+            {getResistanceCrackPrice(state.resistance).toFixed(1)}
+          </div>
+          <div>trajectory: {getChartTrajectoryPos(state.chart).toFixed(2)}</div>
+          <div>
+            focus {Math.round(focusMs)}ms {focusReady ? 'READY' : ''}
           </div>
           <div>timing label: {state.lastTapEffect?.timingLabel ?? '—'}</div>
           <div>
-            streak {state.resistance.breakoutStreak} · perfect {state.resistance.perfectBreakouts} · rejected{' '}
+            crack streak {state.resistance.crackHitStreak} · perfect {state.resistance.perfectBreakouts} · rejected{' '}
             {state.resistance.rejections}
           </div>
+          <div>bonus: {state.bonusTarget ? `${state.bonusTarget.price.toFixed(1)} exp ${Math.max(0, Math.ceil((state.bonusTarget.expiresAt - now) / 1000))}s` : '—'}</div>
           <div>ETA @3tps·x2: {Number.isFinite(etaSeconds) ? `${etaSeconds}s` : '—'}</div>
           <div>taps (run): {state.taps}</div>
           <div>run time: {runSeconds}s</div>

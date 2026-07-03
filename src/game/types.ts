@@ -92,7 +92,15 @@ export type TapRating = 'perfect' | 'good' | 'weak' | 'rejected' | 'overheated'
 // overlay. `waiting`/`approaching`/`smash` are derived from the live chart price;
 // `broken`/`rejected`/`overheated` are short-lived event beats (held until
 // `phaseUntil`) that a tap (or the anti-pin timer) stamps.
-export type ResistancePhase = 'waiting' | 'approaching' | 'smash' | 'broken' | 'rejected' | 'overheated' | 'shattered'
+export type ResistancePhase =
+  | 'waiting'
+  | 'approaching'
+  | 'smash'
+  | 'broken'
+  | 'missed'
+  | 'rejected'
+  | 'overheated'
+  | 'shattered'
 
 export interface ResistanceState {
   id: number
@@ -106,6 +114,12 @@ export interface ResistanceState {
   // v0.4E: target-local wall health. Fresh targets start at 3; clean hits crack
   // this target only, and a full shatter respawns the next target with fresh pips.
   crackPips: number
+  // v0.4F: active weak spot. The marker lives along the rendered resistance
+  // segment, while the price offset turns "hit the wall" into "hit the crack".
+  crackTargetPos: number
+  crackTargetPriceOffset: number
+  crackTargetSeq: number
+  crackHitStreak: number
   // ms epoch used by the patience/focus beat. It is never restored from saves.
   focusStartedAt: number
   // v0.4A clarity pass.
@@ -133,6 +147,7 @@ export interface TapEffect {
   // concrete "what just happened" readout instead of just a combat-text burst.
   breakoutReward?: {
     chain: number
+    crackStreak?: number
     superchargeGain: number
     curvePercent: number
     shattered?: boolean
@@ -203,6 +218,14 @@ export interface ToastEffect {
   line: string
 }
 
+export interface BonusTarget {
+  id: number
+  xPos: number
+  price: number
+  spawnedAt: number
+  expiresAt: number
+}
+
 export interface GameState {
   saveVersion: number
   resources: ResourceState
@@ -251,6 +274,7 @@ export interface GameState {
   // v0.4 Resistance Breakout visual contract. Slice 1/2 only stores and renders
   // the active target; tap rewards/punishments remain v0.3.5 until the next pass.
   resistance: ResistanceState
+  bonusTarget: BonusTarget | null
   upgrades: Record<string, number>
   cards: Record<string, number>
   event: EventState

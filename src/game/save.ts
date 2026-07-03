@@ -48,9 +48,12 @@ function looksLikeResistance(value: unknown): value is ResistanceState {
 function migrateGameState(value: GameState): GameState {
   const raw = value as Partial<GameState>
   const chart = raw.chart ?? createInitialChart()
+  const freshResistance = looksLikeResistance(raw.resistance)
+    ? createInitialResistance(chart.price, raw.resistance.id)
+    : createInitialResistance(chart.price)
   const resistance = looksLikeResistance(raw.resistance)
     ? {
-        ...createInitialResistance(chart.price, raw.resistance.id),
+        ...freshResistance,
         price: raw.resistance.price,
         lastResistanceHitAt: raw.resistance.lastResistanceHitAt ?? 0,
         breakoutStreak: raw.resistance.breakoutStreak ?? 0,
@@ -60,9 +63,19 @@ function migrateGameState(value: GameState): GameState {
           typeof raw.resistance.crackPips === 'number'
             ? Math.max(0, Math.min(RESISTANCE_MAX_CRACK_PIPS, raw.resistance.crackPips))
             : RESISTANCE_MAX_CRACK_PIPS,
+        crackTargetPos:
+          typeof raw.resistance.crackTargetPos === 'number'
+            ? Math.max(0.12, Math.min(0.88, raw.resistance.crackTargetPos))
+            : freshResistance.crackTargetPos,
+        crackTargetPriceOffset:
+          typeof raw.resistance.crackTargetPriceOffset === 'number'
+            ? Math.max(-8, Math.min(8, raw.resistance.crackTargetPriceOffset))
+            : freshResistance.crackTargetPriceOffset,
+        crackTargetSeq: raw.resistance.crackTargetSeq ?? freshResistance.crackTargetSeq,
+        crackHitStreak: raw.resistance.crackHitStreak ?? raw.resistance.breakoutStreak ?? 0,
         focusStartedAt: 0,
       }
-    : createInitialResistance(chart.price)
+    : freshResistance
 
   return {
     ...value,
@@ -105,6 +118,7 @@ function migrateGameState(value: GameState): GameState {
     // simply ignored.
     chart,
     resistance,
+    bonusTarget: null,
     toast: raw.toast ?? null,
     newCardCount: raw.newCardCount ?? 0,
     streakEffect: raw.streakEffect ?? null,
