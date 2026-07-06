@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import { waffleBackroom } from '../data/waffleBackroom.v1'
+import { updateTopdownDebug, updateTopdownDebugActions } from '../debug'
 import type { TopdownGameCallbacks } from '../events'
 import type { TopdownSaveV1 } from '../types'
 import { CombatController } from '../systems/combat'
@@ -34,6 +35,15 @@ export class WaffleBackroomScene extends Phaser.Scene {
   }
 
   create() {
+    this.player = null
+    this.combat = null
+    this.enemies = []
+    this.bagSprite = null
+    this.lostBagSprite = null
+    this.carriedBag = 0
+    this.failed = false
+    this.escaped = false
+
     const room = waffleBackroom
     this.physics.world.setBounds(0, 0, room.world.width, room.world.height)
     this.cameras.main.setBackgroundColor('#05070c')
@@ -52,8 +62,10 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.createBagLoop()
     this.cameras.main.startFollow(this.player.sprite, true, 0.12, 0.12)
     this.startedAt = this.time.now
+    this.registerDebugActions()
 
     this.emitHud('Grab THE BAG, shove Jeets, and reach the RUG EXIT.')
+    this.updateDebugSnapshot()
   }
 
   update() {
@@ -72,6 +84,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
         return
       }
     }
+    this.updateDebugSnapshot()
   }
 
   private failRun(cause: string) {
@@ -99,6 +112,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     }
     this.cameras.main.shake(170, 0.012)
     this.emitHud('Restarting...', 'failed', cause)
+    this.updateDebugSnapshot()
     this.time.delayedCall(520, () => this.scene.restart())
   }
 
@@ -128,6 +142,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.bagSprite.destroy()
     this.emitFloatingText(this.player?.sprite.x ?? waffleBackroom.bagSpawn.x, this.player?.sprite.y ?? waffleBackroom.bagSpawn.y - 28, 'THE BAG')
     this.emitHud('THE BAG is hot. Get to the RUG EXIT or get greedy.')
+    this.updateDebugSnapshot()
   }
 
   private recoverLostBag() {
@@ -149,6 +164,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.callbacks.onSaveChange(this.save)
     this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, 'LOST BAG RECOVERED')
     this.emitHud('Lost Bag recovered. Now leave.')
+    this.updateDebugSnapshot()
   }
 
   private rugExit() {
@@ -177,6 +193,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.cameras.main.flash(180, 70, 255, 155)
     this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `+$${banked} RENT`)
     this.emitHud('RUG EXIT hit. Rent banked.', 'escaped')
+    this.updateDebugSnapshot()
     this.time.delayedCall(650, () => this.scene.restart())
   }
 
@@ -205,5 +222,50 @@ export class WaffleBackroomScene extends Phaser.Scene {
       duration: 520,
       onComplete: () => label.destroy(),
     })
+  }
+
+  private updateDebugSnapshot() {
+    if (!this.player) {
+      return
+    }
+
+    updateTopdownDebug({
+      roomId: waffleBackroom.id,
+      player: {
+        x: Math.round(this.player.sprite.x),
+        y: Math.round(this.player.sprite.y),
+        velocityX: Math.round(this.player.sprite.body?.velocity.x ?? 0),
+        velocityY: Math.round(this.player.sprite.body?.velocity.y ?? 0),
+        heldKeys: this.player.getHeldKeys(),
+      },
+      enemies: this.enemies.map((enemy) => ({
+        id: enemy.sprite.name,
+        x: Math.round(enemy.sprite.x),
+        y: Math.round(enemy.sprite.y),
+        stunned: enemy.isStunned(this.time.now),
+      })),
+      carriedBag: this.carriedBag,
+      save: this.save,
+      failed: this.failed,
+      escaped: this.escaped,
+    })
+  }
+
+  private registerDebugActions() {
+    updateTopdownDebugActions({
+      movePlayerTo: (x: number, y: number) => {
+        if (!this.player || this.failed || this.escaped) {
+          return
+        }
+
+        this.player.sprite.setPosition(x, y)
+        this.player.sprite.setVelocity(0, 0)
+        this.physics.world.update(this.time.now, 16)
+        this.updateDebugSnapshot()
+      },
+      forceFailure: (cause: string) => this.failRun(cause),
+    })
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => updateTopdownDebugActions(null))
   }
 }

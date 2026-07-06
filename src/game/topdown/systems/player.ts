@@ -8,8 +8,7 @@ export class PlayerController {
   readonly sprite: Phaser.Physics.Arcade.Sprite
 
   private readonly scene: Phaser.Scene
-  private readonly keys: Partial<Record<'up' | 'down' | 'left' | 'right', Phaser.Input.Keyboard.Key>>
-  private readonly cursors: Phaser.Types.Input.Keyboard.CursorKeys | null
+  private readonly heldKeys = new Set<string>()
   private readonly facing = new Phaser.Math.Vector2(1, 0)
 
   constructor(scene: Phaser.Scene, spawn: RoomPoint) {
@@ -21,16 +20,12 @@ export class PlayerController {
     const body = this.sprite.body as Phaser.Physics.Arcade.Body
     body.setCircle(14, 2, 2)
 
-    const keyboard = scene.input.keyboard
-    this.cursors = keyboard?.createCursorKeys() ?? null
-    this.keys = keyboard
-      ? {
-          up: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W),
-          down: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S),
-          left: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-          right: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-        }
-      : {}
+    window.addEventListener('keydown', this.handleKeyDown)
+    window.addEventListener('keyup', this.handleKeyUp)
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      window.removeEventListener('keydown', this.handleKeyDown)
+      window.removeEventListener('keyup', this.handleKeyUp)
+    })
   }
 
   update() {
@@ -53,12 +48,24 @@ export class PlayerController {
     return this.facing.clone()
   }
 
+  getHeldKeys() {
+    return [...this.heldKeys]
+  }
+
   private getKeyboardVector() {
-    const left = this.keys.left?.isDown || this.cursors?.left.isDown
-    const right = this.keys.right?.isDown || this.cursors?.right.isDown
-    const up = this.keys.up?.isDown || this.cursors?.up.isDown
-    const down = this.keys.down?.isDown || this.cursors?.down.isDown
+    const left = this.heldKeys.has('a') || this.heldKeys.has('arrowleft')
+    const right = this.heldKeys.has('d') || this.heldKeys.has('arrowright')
+    const up = this.heldKeys.has('w') || this.heldKeys.has('arrowup')
+    const down = this.heldKeys.has('s') || this.heldKeys.has('arrowdown')
     return new Phaser.Math.Vector2((right ? 1 : 0) - (left ? 1 : 0), (down ? 1 : 0) - (up ? 1 : 0))
+  }
+
+  private readonly handleKeyDown = (event: KeyboardEvent) => {
+    this.heldKeys.add(event.key.toLowerCase())
+  }
+
+  private readonly handleKeyUp = (event: KeyboardEvent) => {
+    this.heldKeys.delete(event.key.toLowerCase())
   }
 
   private getPointerVector() {

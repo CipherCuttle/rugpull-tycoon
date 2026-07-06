@@ -11,8 +11,7 @@ export function mountTopdownGame(parent: HTMLElement, save: TopdownSaveV1, callb
     backgroundColor: '#05070c',
     pixelArt: false,
     scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
+      mode: Phaser.Scale.RESIZE,
       width: 960,
       height: 540,
     },

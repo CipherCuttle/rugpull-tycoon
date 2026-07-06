@@ -10,17 +10,17 @@ const HITSTOP_MS = 55
 export class CombatController {
   private readonly scene: Phaser.Scene
   private readonly player: PlayerController
-  private readonly spaceKey: Phaser.Input.Keyboard.Key | null
   private nextShoveAt = 0
   private queuedHudAttack = false
 
   constructor(scene: Phaser.Scene, player: PlayerController) {
     this.scene = scene
     this.player = player
-    this.spaceKey = scene.input.keyboard?.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE) ?? null
     window.addEventListener('rugpull-topdown-attack', this.queueHudAttack)
+    window.addEventListener('keydown', this.queueKeyboardAttack)
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       window.removeEventListener('rugpull-topdown-attack', this.queueHudAttack)
+      window.removeEventListener('keydown', this.queueKeyboardAttack)
     })
   }
 
@@ -36,13 +36,19 @@ export class CombatController {
     this.queuedHudAttack = true
   }
 
+  private readonly queueKeyboardAttack = (event: KeyboardEvent) => {
+    if (event.code === 'Space' || event.key === ' ') {
+      this.queuedHudAttack = true
+    }
+  }
+
   private shouldShove() {
     if (this.queuedHudAttack) {
       this.queuedHudAttack = false
       return true
     }
 
-    return this.spaceKey ? Phaser.Input.Keyboard.JustDown(this.spaceKey) : false
+    return false
   }
 
   private shove(now: number, enemies: EnemyController[]) {

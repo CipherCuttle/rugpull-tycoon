@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import type { JeetSpawn, RoomPoint } from '../types'
 
 const JEET_SPEED = 150
-const JEET_NOTICE_RANGE = 310
+const JEET_NOTICE_RANGE = 230
 const JEET_ATTACK_RANGE = 31
 const PATROL_POINT_RANGE = 12
 const STUN_MS = 720
