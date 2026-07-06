@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { waffleBackroom } from '../data/waffleBackroom.v1'
 import { updateTopdownDebug, updateTopdownDebugActions } from '../debug'
 import type { TopdownGameCallbacks } from '../events'
-import type { HeatTier, TopdownSaveV1, TrashKind } from '../types'
+import type { FakeAlphaSpawn, HeatTier, RoomRect, RugWindowState, TopdownSaveV1, TrashKind } from '../types'
 import { AuditorController } from '../systems/auditor'
 import { CombatController } from '../systems/combat'
 import type { Stunnable } from '../systems/combatTargets'
@@ -12,19 +12,37 @@ import { TRASH_LABELS, TrashController } from '../systems/trash'
 import {
   STARTING_BAG_VALUE,
   createBagSprite,
-  createGreedSprite,
+  createFakeAlphaSprite,
   createLostBagSnapshot,
   createLostBagSprite,
   createRugExitZone,
 } from '../systems/bag'
 import { buildRoomCollision, drawRoomBackdrop } from '../systems/roomLoader'
 
+const HEAT_PRESSURE_VALUE = 20
+const FREE_MINT_SPEED_MULTIPLIER = 0.85
+const FREE_MINT_SLOW_MS = 900
+
 const HEAT_TIERS: Array<{ tier: HeatTier, min: number, label: string, speedMultiplier: number }> = [
   { tier: 0, min: 0, label: 'Cold / Broke', speedMultiplier: 1 },
   { tier: 1, min: 1, label: 'Warm Bag', speedMultiplier: 1.04 },
-  { tier: 2, min: 120, label: 'Hot Bag', speedMultiplier: 1.08 },
-  { tier: 3, min: 170, label: 'Nuclear Bag', speedMultiplier: 1.12 },
+  { tier: 2, min: 150, label: 'Hot Bag', speedMultiplier: 1.08 },
+  { tier: 3, min: 210, label: 'Nuclear Bag', speedMultiplier: 1.12 },
 ]
+
+const RUG_WINDOW_LABELS: Record<RugWindowState, string> = {
+  'no-bag': 'NO BAG',
+  open: 'RUG WINDOW: OPEN',
+  hot: 'RUG WINDOW: HOT',
+  unstable: 'RUG WINDOW: UNSTABLE',
+}
+
+const RUG_WINDOW_STYLES: Record<RugWindowState, { color: number, textColor: string, alpha: number, duration: number }> = {
+  'no-bag': { color: 0x46ff9b, textColor: '#8fa2bd', alpha: 0.22, duration: 0 },
+  open: { color: 0x46ff9b, textColor: '#46ff9b', alpha: 0.72, duration: 900 },
+  hot: { color: 0xffc23a, textColor: '#ffc23a', alpha: 0.82, duration: 620 },
+  unstable: { color: 0xff6b52, textColor: '#ff6b52', alpha: 0.92, duration: 360 },
+}
 
 function getBagHeat(carriedBag: number) {
   let heat = HEAT_TIERS[0]
@@ -47,9 +65,13 @@ export class WaffleBackroomScene extends Phaser.Scene {
   private bagSprite: Phaser.Physics.Arcade.Sprite | null = null
   private lostBagSprite: Phaser.Physics.Arcade.Sprite | null = null
   private lostBagLabel: Phaser.GameObjects.Text | null = null
+  private rugWindowFrame: Phaser.GameObjects.Rectangle | null = null
+  private rugWindowText: Phaser.GameObjects.Text | null = null
   private heldTrash: TrashKind | null = null
   private carriedBag = 0
+  private heatPressure = 0
   private heatTier: HeatTier = 0
+  private rugWindowState: RugWindowState = 'no-bag'
   private startedAt = 0
   private failed = false
   private escaped = false
@@ -69,9 +91,13 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.bagSprite = null
     this.lostBagSprite = null
     this.lostBagLabel = null
+    this.rugWindowFrame = null
+    this.rugWindowText = null
     this.heldTrash = null
     this.carriedBag = 0
+    this.heatPressure = 0
     this.heatTier = 0
+    this.rugWindowState = 'no-bag'
     this.failed = false
     this.escaped = false
 
@@ -144,7 +170,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.trash?.update(now, targets)
 
     for (const enemy of this.enemies) {
-      const cause = enemy.update(now, this.player.sprite, getBagHeat(this.carriedBag).speedMultiplier)
+      const cause = enemy.update(now, this.player.sprite, this.getCurrentHeat().speedMultiplier)
       if (cause) {
         this.failRun(cause)
         return
@@ -175,6 +201,8 @@ export class WaffleBackroomScene extends Phaser.Scene {
       ? createLostBagSnapshot(waffleBackroom, this.player?.sprite.x ?? waffleBackroom.playerSpawn.x, this.player?.sprite.y ?? waffleBackroom.playerSpawn.y, droppedValue)
       : this.save.lostBag
     this.carriedBag = 0
+    this.heatPressure = 0
+    this.syncHeatFeedback()
     this.save = {
       ...this.save,
       lostBag: droppedBag,
@@ -212,20 +240,22 @@ export class WaffleBackroomScene extends Phaser.Scene {
 
     const room = waffleBackroom
     const exitZone = createRugExitZone(this, room.rugExit)
+    this.createRugWindowFeedback(room.rugExit)
     this.bagSprite = createBagSprite(this, room.bagSpawn.x, room.bagSpawn.y)
     this.physics.add.overlap(this.player.sprite, this.bagSprite, () => this.pickupBag())
     this.physics.add.overlap(this.player.sprite, exitZone, () => this.rugExit())
 
-    // Optional greed gems live behind danger, off the safe exit line.
-    for (const greed of room.greed) {
-      const sprite = createGreedSprite(this, greed.x, greed.y)
-      this.add.text(greed.x, greed.y - 26, `+$${greed.value}`, {
-        color: '#46ff9b',
+    // Fake Alpha pickups are readable cursed opportunities, not an inventory/card layer.
+    for (const alpha of room.fakeAlpha) {
+      const sprite = createFakeAlphaSprite(this, alpha)
+      this.add.text(alpha.x, alpha.y - 30, `${alpha.label}\n+$${alpha.bagValue}`, {
+        align: 'center',
+        color: alpha.labelColor,
         fontFamily: 'monospace',
-        fontSize: '12px',
+        fontSize: '11px',
         fontStyle: '900',
       }).setOrigin(0.5).setDepth(15)
-      this.physics.add.overlap(this.player.sprite, sprite, () => this.pickupGreed(sprite, greed.value))
+      this.physics.add.overlap(this.player.sprite, sprite, () => this.pickupFakeAlpha(sprite, alpha))
     }
 
     if (this.save.lostBag?.roomId === room.id) {
@@ -275,17 +305,42 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.updateDebugSnapshot()
   }
 
-  private pickupGreed(sprite: Phaser.Physics.Arcade.Sprite, value: number) {
+  private pickupFakeAlpha(sprite: Phaser.Physics.Arcade.Sprite, alpha: FakeAlphaSpawn) {
     if (!sprite.active) {
       return
     }
 
-    this.carriedBag += value
+    this.carriedBag += alpha.bagValue
+    this.heatPressure += alpha.heatBump
     this.syncHeatFeedback()
     sprite.destroy()
-    this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `GREED +$${value}`, '#46ff9b')
-    this.emitHud(`Greedy. Carrying $${this.carriedBag}. Now survive the way out.`)
+    this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `${alpha.label} +$${alpha.bagValue}`, alpha.labelColor)
+    this.applyFakeAlphaSideEffect(alpha)
+    this.emitHud(`${alpha.status} Carrying $${this.carriedBag}.`)
     this.updateDebugSnapshot()
+  }
+
+  private applyFakeAlphaSideEffect(alpha: FakeAlphaSpawn) {
+    if (alpha.sideEffect === 'slow') {
+      this.player?.applyTemporarySpeedMultiplier(FREE_MINT_SPEED_MULTIPLIER, FREE_MINT_SLOW_MS)
+      this.emitFloatingText(this.player?.sprite.x ?? 0, (this.player?.sprite.y ?? 0) + 24, 'SLOWED', alpha.labelColor)
+      return
+    }
+
+    if (alpha.sideEffect === 'auditor-pulse') {
+      this.pulseAuditors(alpha.labelColor)
+    }
+  }
+
+  private pulseAuditors(color: string) {
+    this.cameras.main.shake(110, 0.008)
+    for (const auditor of this.auditors) {
+      const ring = this.add.circle(auditor.sprite.x, auditor.sprite.y, 28, 0xff6b52, 0.16)
+        .setStrokeStyle(3, 0xffc23a, 0.9)
+        .setDepth(21)
+      this.tweens.add({ targets: ring, scale: 2.2, alpha: 0, duration: 300, onComplete: () => ring.destroy() })
+      this.emitFloatingText(auditor.sprite.x, auditor.sprite.y - 34, 'ALERT', color)
+    }
   }
 
   private onHeldTrashChange(held: TrashKind | null) {
@@ -343,6 +398,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     const elapsed = Math.max(1, Math.round(this.time.now - this.startedAt))
     const previousBest = this.save.stats.bestEscapeMsByRoom[waffleBackroom.id]
     this.carriedBag = 0
+    this.heatPressure = 0
     this.syncHeatFeedback()
     this.escaped = true
     this.save = {
@@ -371,7 +427,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     deathCause: string | null = null,
     lastDeathCause: string | null = null,
   ) {
-    const heat = getBagHeat(this.carriedBag)
+    const heat = this.getCurrentHeat()
     this.callbacks.onHudChange({
       status,
       rentBanked: this.save.rentBanked,
@@ -380,6 +436,8 @@ export class WaffleBackroomScene extends Phaser.Scene {
       heldTrash: this.heldTrash,
       heatTier: heat.tier,
       heatLabel: heat.label,
+      rugWindowState: this.getRugWindowState(heat.tier),
+      rugWindowLabel: RUG_WINDOW_LABELS[this.getRugWindowState(heat.tier)],
       deathCause,
       lastDeathCause,
       runState,
@@ -387,7 +445,8 @@ export class WaffleBackroomScene extends Phaser.Scene {
   }
 
   private syncHeatFeedback() {
-    const nextHeat = getBagHeat(this.carriedBag)
+    const nextHeat = this.getCurrentHeat()
+    this.updateRugWindowFeedback(nextHeat.tier)
     if (nextHeat.tier === this.heatTier) {
       return
     }
@@ -396,6 +455,78 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.heatTier = nextHeat.tier
     if (nextHeat.tier > previousTier && nextHeat.tier >= 2) {
       this.pulseHeatEdges(nextHeat.tier)
+    }
+  }
+
+  private getEffectiveHeat() {
+    return this.carriedBag + this.heatPressure * HEAT_PRESSURE_VALUE
+  }
+
+  private getCurrentHeat() {
+    return getBagHeat(this.getEffectiveHeat())
+  }
+
+  private getRugWindowState(tier = this.getCurrentHeat().tier): RugWindowState {
+    if (this.carriedBag <= 0) {
+      return 'no-bag'
+    }
+
+    if (tier >= 3) {
+      return 'unstable'
+    }
+
+    if (tier >= 2) {
+      return 'hot'
+    }
+
+    return 'open'
+  }
+
+  private createRugWindowFeedback(exit: RoomRect) {
+    const centerX = exit.x + exit.width / 2
+    const centerY = exit.y + exit.height / 2
+    this.rugWindowFrame = this.add.rectangle(centerX, centerY, exit.width + 12, exit.height + 12)
+      .setDepth(13)
+      .setAlpha(0.22)
+      .setStrokeStyle(2, 0x46ff9b, 0.22)
+
+    this.rugWindowText = this.add.text(centerX, exit.y - 18, RUG_WINDOW_LABELS['no-bag'], {
+      align: 'center',
+      color: '#8fa2bd',
+      fontFamily: 'monospace',
+      fontSize: '12px',
+      fontStyle: '900',
+    }).setOrigin(0.5).setDepth(18)
+    this.updateRugWindowFeedback(0)
+  }
+
+  private updateRugWindowFeedback(tier = this.getCurrentHeat().tier) {
+    const nextState = this.getRugWindowState(tier)
+    const frame = this.rugWindowFrame
+    const label = this.rugWindowText
+    if (!frame || !label || nextState === this.rugWindowState) {
+      return
+    }
+
+    this.rugWindowState = nextState
+    const style = RUG_WINDOW_STYLES[nextState]
+    this.tweens.killTweensOf(frame)
+    frame.setScale(1)
+    frame.setAlpha(style.alpha)
+    frame.setStrokeStyle(nextState === 'unstable' ? 4 : 3, style.color, style.alpha)
+    label.setText(RUG_WINDOW_LABELS[nextState])
+    label.setColor(style.textColor)
+    label.setAlpha(nextState === 'no-bag' ? 0.72 : 1)
+
+    if (style.duration > 0) {
+      this.tweens.add({
+        targets: frame,
+        alpha: Math.max(0.34, style.alpha - 0.22),
+        scale: nextState === 'unstable' ? 1.08 : 1.04,
+        duration: style.duration,
+        yoyo: true,
+        repeat: -1,
+      })
     }
   }
 
@@ -466,7 +597,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
         stunned: target.isStunned(this.time.now),
       })),
       carriedBag: this.carriedBag,
-      heatTier: getBagHeat(this.carriedBag).tier,
+      heatTier: this.getCurrentHeat().tier,
       save: this.save,
       failed: this.failed,
       escaped: this.escaped,

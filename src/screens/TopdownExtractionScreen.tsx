@@ -13,6 +13,8 @@ const initialHud: TopdownHudState = {
   heldTrash: null,
   heatTier: 0,
   heatLabel: 'Cold / Broke',
+  rugWindowState: 'no-bag',
+  rugWindowLabel: 'NO BAG',
   deathCause: null,
   lastDeathCause: null,
   runState: 'playing',
@@ -63,10 +65,11 @@ export function TopdownExtractionScreen() {
       </header>
 
       <div className="topdown-cabinet">
-        <div className={`topdown-quick-strip heat-tier-${hud.heatTier}`} aria-label="Compact run status">
+        <div className={`topdown-quick-strip heat-tier-${hud.heatTier} rug-window-${hud.rugWindowState}`} aria-label="Compact run status">
           <span>Bag {formatDollars(hud.carriedBag)}</span>
           <span>Rent {formatDollars(hud.rentBanked)}</span>
           <span>Heat {hud.heatLabel}</span>
+          <span>{hud.rugWindowLabel}</span>
         </div>
 
         <div className="topdown-play-layout">

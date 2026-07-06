@@ -9,6 +9,8 @@ export class PlayerController {
 
   private readonly scene: Phaser.Scene
   private readonly heldKeys = new Set<string>()
+  private speedMultiplier = 1
+  private speedResetTimer: Phaser.Time.TimerEvent | null = null
   private facingRadians = 0
   private mouseActive = false
 
@@ -28,6 +30,7 @@ export class PlayerController {
       window.removeEventListener('keydown', this.handleKeyDown)
       window.removeEventListener('keyup', this.handleKeyUp)
       scene.input.off(Phaser.Input.Events.POINTER_MOVE, this.handlePointerMove)
+      this.speedResetTimer?.remove(false)
     })
   }
 
@@ -37,7 +40,8 @@ export class PlayerController {
     const move = keyboardVector.lengthSq() > 0 ? keyboardVector.normalize() : this.getTouchMoveVector()
 
     if (move.lengthSq() > 0) {
-      this.sprite.setVelocity(move.x * PLAYER_SPEED, move.y * PLAYER_SPEED)
+      const speed = PLAYER_SPEED * this.speedMultiplier
+      this.sprite.setVelocity(move.x * speed, move.y * speed)
       if (!this.mouseActive) {
         // No mouse yet: face where we are heading (keyboard/touch fallback).
         this.facingRadians = move.angle()
@@ -66,6 +70,15 @@ export class PlayerController {
 
   getHeldKeys() {
     return [...this.heldKeys]
+  }
+
+  applyTemporarySpeedMultiplier(multiplier: number, durationMs: number) {
+    this.speedMultiplier = multiplier
+    this.speedResetTimer?.remove(false)
+    this.speedResetTimer = this.scene.time.delayedCall(durationMs, () => {
+      this.speedMultiplier = 1
+      this.speedResetTimer = null
+    })
   }
 
   private getKeyboardVector() {
