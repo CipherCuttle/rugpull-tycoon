@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
-import { EnemyController } from './enemyAi'
+import type { Stunnable } from './combatTargets'
 import { PlayerController } from './player'
+import { TrashController } from './trash'
 
 const SHOVE_RANGE = 62
 const SHOVE_DOT_MIN = 0.28
@@ -10,12 +11,14 @@ const HITSTOP_MS = 55
 export class CombatController {
   private readonly scene: Phaser.Scene
   private readonly player: PlayerController
+  private readonly trash: TrashController
   private nextShoveAt = 0
   private queuedHudAttack = false
 
-  constructor(scene: Phaser.Scene, player: PlayerController) {
+  constructor(scene: Phaser.Scene, player: PlayerController, trash: TrashController) {
     this.scene = scene
     this.player = player
+    this.trash = trash
     window.addEventListener('rugpull-topdown-attack', this.queueHudAttack)
     window.addEventListener('keydown', this.queueKeyboardAttack)
     scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.queuePointerAttack)
@@ -26,12 +29,21 @@ export class CombatController {
     })
   }
 
-  update(now: number, enemies: EnemyController[]) {
-    if (!this.shouldShove()) {
+  update(now: number, targets: Stunnable[]) {
+    if (!this.shouldAct()) {
       return
     }
 
-    this.shove(now, enemies)
+    const origin = new Phaser.Math.Vector2(this.player.sprite.x, this.player.sprite.y)
+    const facing = this.player.getFacing()
+
+    // Holding trash turns the attack into a throw; empty-handed, it's a shove.
+    if (this.trash.isHolding()) {
+      this.trash.throw(origin, facing, now)
+      return
+    }
+
+    this.shove(now, origin, facing, targets)
   }
 
   private readonly queueHudAttack = () => {
@@ -45,13 +57,13 @@ export class CombatController {
   }
 
   private readonly queuePointerAttack = (pointer: Phaser.Input.Pointer) => {
-    // Only a left mouse click shoves; touch is reserved for movement + the HUD button.
+    // Only a left mouse click attacks; touch is reserved for movement + the HUD button.
     if (!pointer.wasTouch && pointer.leftButtonDown()) {
       this.queuedHudAttack = true
     }
   }
 
-  private shouldShove() {
+  private shouldAct() {
     if (this.queuedHudAttack) {
       this.queuedHudAttack = false
       return true
@@ -60,33 +72,31 @@ export class CombatController {
     return false
   }
 
-  private shove(now: number, enemies: EnemyController[]) {
+  private shove(now: number, origin: Phaser.Math.Vector2, facing: Phaser.Math.Vector2, targets: Stunnable[]) {
     if (now < this.nextShoveAt) {
       return
     }
 
     this.nextShoveAt = now + SHOVE_COOLDOWN_MS
-    const origin = new Phaser.Math.Vector2(this.player.sprite.x, this.player.sprite.y)
-    const facing = this.player.getFacing()
     let hit = false
 
-    for (const enemy of enemies) {
-      if (enemy.isStunned(now)) {
+    for (const target of targets) {
+      if (target.isStunned(now)) {
         continue
       }
 
-      const toEnemy = new Phaser.Math.Vector2(enemy.sprite.x - origin.x, enemy.sprite.y - origin.y)
-      const distance = toEnemy.length()
+      const toTarget = new Phaser.Math.Vector2(target.sprite.x - origin.x, target.sprite.y - origin.y)
+      const distance = toTarget.length()
       if (distance > SHOVE_RANGE || distance <= 0) {
         continue
       }
 
-      const direction = toEnemy.clone().normalize()
+      const direction = toTarget.clone().normalize()
       if (direction.dot(facing) < SHOVE_DOT_MIN) {
         continue
       }
 
-      enemy.stun(origin, now)
+      target.stun(origin, now)
       hit = true
     }
 

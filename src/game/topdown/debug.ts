@@ -1,10 +1,11 @@
-import type { TopdownSaveV1 } from './types'
+import type { HeatTier, TopdownSaveV1 } from './types'
 
 export interface TopdownDebugSnapshot {
   roomId: string
   player: { x: number; y: number; velocityX: number; velocityY: number; heldKeys: string[]; facingDegrees: number }
   enemies: { id: string; x: number; y: number; stunned: boolean }[]
   carriedBag: number
+  heatTier: HeatTier
   save: TopdownSaveV1
   failed: boolean
   escaped: boolean
