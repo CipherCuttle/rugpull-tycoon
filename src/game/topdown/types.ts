@@ -15,3 +15,34 @@ export interface TopdownHudState {
   deathCause: string | null
   runState: TopdownRunState
 }
+
+export interface RoomPoint {
+  x: number
+  y: number
+}
+
+export interface RoomRect extends RoomPoint {
+  id: string
+  width: number
+  height: number
+}
+
+export interface JeetSpawn extends RoomPoint {
+  id: string
+  patrol: RoomPoint[]
+}
+
+export interface TopdownRoomData {
+  id: string
+  name: string
+  world: {
+    width: number
+    height: number
+  }
+  playerSpawn: RoomPoint
+  bagSpawn: RoomPoint
+  rugExit: RoomRect
+  walls: RoomRect[]
+  props: RoomRect[]
+  jeets: JeetSpawn[]
+}
