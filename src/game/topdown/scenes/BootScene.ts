@@ -12,9 +12,12 @@ export class BootScene extends Phaser.Scene {
   create() {
     const dust = this.make.graphics({ x: 0, y: 0 })
     dust.fillStyle(0x46ff9b, 1)
-    dust.fillCircle(16, 16, 14)
-    dust.fillStyle(0xf5f2dc, 1)
-    dust.fillTriangle(25, 16, 13, 10, 13, 22)
+    dust.fillCircle(16, 16, 13)
+    // Cracked-phone / knife wedge protruding from the front so facing reads at a glance.
+    dust.fillStyle(0xffc23a, 1)
+    dust.fillTriangle(30, 16, 12, 11, 12, 21)
+    dust.fillStyle(0x08040a, 1)
+    dust.fillCircle(16, 16, 3)
     dust.generateTexture('dust-pawn', 32, 32)
     dust.destroy()
 

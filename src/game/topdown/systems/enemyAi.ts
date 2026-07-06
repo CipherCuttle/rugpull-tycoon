@@ -6,7 +6,8 @@ const JEET_NOTICE_RANGE = 230
 const JEET_ATTACK_RANGE = 31
 const PATROL_POINT_RANGE = 12
 const STUN_MS = 720
-const KNOCKBACK_SPEED = 420
+const KNOCKBACK_SPEED = 780
+const STUN_TINT = 0x8fa2bd
 
 export class EnemyController {
   readonly sprite: Phaser.Physics.Arcade.Sprite
@@ -28,11 +29,14 @@ export class EnemyController {
   update(now: number, player: Phaser.Physics.Arcade.Sprite) {
     if (now < this.stunnedUntil) {
       const body = this.sprite.body as Phaser.Physics.Arcade.Body
-      this.sprite.setTint(0xffc23a)
-      this.sprite.setVelocity(body.velocity.x * 0.9, body.velocity.y * 0.9)
+      // Stunned Jeets read as dazed: cold grey-blue tint + faded, sliding to a stop.
+      this.sprite.setTint(STUN_TINT)
+      this.sprite.setAlpha(0.55)
+      this.sprite.setVelocity(body.velocity.x * 0.95, body.velocity.y * 0.95)
       return null
     }
 
+    this.sprite.setAlpha(1)
     const toPlayer = new Phaser.Math.Vector2(player.x - this.sprite.x, player.y - this.sprite.y)
     const distanceToPlayer = toPlayer.length()
 
@@ -62,7 +66,8 @@ export class EnemyController {
     }
     knockback.normalize()
     this.stunnedUntil = now + STUN_MS
-    this.sprite.setTint(0xffc23a)
+    this.sprite.setTint(STUN_TINT)
+    this.sprite.setAlpha(0.55)
     this.sprite.setVelocity(knockback.x * KNOCKBACK_SPEED, knockback.y * KNOCKBACK_SPEED)
   }
 

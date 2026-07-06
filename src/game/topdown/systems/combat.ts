@@ -18,9 +18,11 @@ export class CombatController {
     this.player = player
     window.addEventListener('rugpull-topdown-attack', this.queueHudAttack)
     window.addEventListener('keydown', this.queueKeyboardAttack)
+    scene.input.on(Phaser.Input.Events.POINTER_DOWN, this.queuePointerAttack)
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       window.removeEventListener('rugpull-topdown-attack', this.queueHudAttack)
       window.removeEventListener('keydown', this.queueKeyboardAttack)
+      scene.input.off(Phaser.Input.Events.POINTER_DOWN, this.queuePointerAttack)
     })
   }
 
@@ -38,6 +40,13 @@ export class CombatController {
 
   private readonly queueKeyboardAttack = (event: KeyboardEvent) => {
     if (event.code === 'Space' || event.key === ' ') {
+      this.queuedHudAttack = true
+    }
+  }
+
+  private readonly queuePointerAttack = (pointer: Phaser.Input.Pointer) => {
+    // Only a left mouse click shoves; touch is reserved for movement + the HUD button.
+    if (!pointer.wasTouch && pointer.leftButtonDown()) {
       this.queuedHudAttack = true
     }
   }
@@ -83,7 +92,7 @@ export class CombatController {
 
     this.showShove(origin, facing, hit)
     if (hit) {
-      this.scene.cameras.main.shake(90, 0.007)
+      this.scene.cameras.main.shake(130, 0.012)
       this.scene.physics.world.pause()
       this.scene.time.delayedCall(HITSTOP_MS, () => this.scene.physics.world.resume())
     }

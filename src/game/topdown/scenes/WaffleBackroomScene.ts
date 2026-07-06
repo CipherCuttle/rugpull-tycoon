@@ -23,6 +23,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
   private enemies: EnemyController[] = []
   private bagSprite: Phaser.Physics.Arcade.Sprite | null = null
   private lostBagSprite: Phaser.Physics.Arcade.Sprite | null = null
+  private lostBagLabel: Phaser.GameObjects.Text | null = null
   private carriedBag = 0
   private startedAt = 0
   private failed = false
@@ -40,12 +41,14 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.enemies = []
     this.bagSprite = null
     this.lostBagSprite = null
+    this.lostBagLabel = null
     this.carriedBag = 0
     this.failed = false
     this.escaped = false
 
     const room = waffleBackroom
     this.physics.world.setBounds(0, 0, room.world.width, room.world.height)
+    this.input.mouse?.disableContextMenu()
     this.cameras.main.setBackgroundColor('#05070c')
     this.cameras.main.setBounds(0, 0, room.world.width, room.world.height)
 
@@ -64,7 +67,19 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.startedAt = this.time.now
     this.registerDebugActions()
 
-    this.emitHud('Grab THE BAG, shove Jeets, and reach the RUG EXIT.')
+    // Carry the last death cause into the fresh run so it stays readable after a fast restart.
+    const data = this.scene.settings.data as { lastDeathCause?: string } | undefined
+    const lastDeathCause = data?.lastDeathCause ?? null
+    if (lastDeathCause) {
+      this.emitHud('Back in. Grab THE BAG.', 'failed', lastDeathCause)
+      this.time.delayedCall(2600, () => {
+        if (!this.failed && !this.escaped) {
+          this.emitHud('Grab THE BAG, shove Jeets, and reach the RUG EXIT.')
+        }
+      })
+    } else {
+      this.emitHud('Grab THE BAG, shove Jeets, and reach the RUG EXIT.')
+    }
     this.updateDebugSnapshot()
   }
 
@@ -93,8 +108,9 @@ export class WaffleBackroomScene extends Phaser.Scene {
     }
 
     this.failed = true
-    const droppedBag = this.carriedBag > 0
-      ? createLostBagSnapshot(waffleBackroom, this.player?.sprite.x ?? waffleBackroom.playerSpawn.x, this.player?.sprite.y ?? waffleBackroom.playerSpawn.y, this.carriedBag)
+    const droppedValue = this.carriedBag
+    const droppedBag = droppedValue > 0
+      ? createLostBagSnapshot(waffleBackroom, this.player?.sprite.x ?? waffleBackroom.playerSpawn.x, this.player?.sprite.y ?? waffleBackroom.playerSpawn.y, droppedValue)
       : this.save.lostBag
     this.carriedBag = 0
     this.save = {
@@ -111,9 +127,15 @@ export class WaffleBackroomScene extends Phaser.Scene {
       enemy.sprite.setVelocity(0, 0)
     }
     this.cameras.main.shake(170, 0.012)
-    this.emitHud('Restarting...', 'failed', cause)
+    const deathCause = droppedValue > 0
+      ? `${cause} — LOST BAG DROPPED, recover $${droppedValue}`
+      : cause
+    if (droppedValue > 0) {
+      this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `LOST BAG DROPPED -$${droppedValue}`, '#ff6b52')
+    }
+    this.emitHud('Restarting...', 'failed', deathCause)
     this.updateDebugSnapshot()
-    this.time.delayedCall(520, () => this.scene.restart())
+    this.time.delayedCall(520, () => this.scene.restart({ lastDeathCause: deathCause }))
   }
 
   private createBagLoop() {
@@ -130,18 +152,41 @@ export class WaffleBackroomScene extends Phaser.Scene {
     if (this.save.lostBag?.roomId === room.id) {
       this.lostBagSprite = createLostBagSprite(this, this.save.lostBag)
       this.physics.add.overlap(this.player.sprite, this.lostBagSprite, () => this.recoverLostBag())
+      this.spawnLostBagMarker(this.save.lostBag.x, this.save.lostBag.y, this.save.lostBag.value)
+    }
+  }
+
+  private spawnLostBagMarker(x: number, y: number, value: number) {
+    // Make the dropped Bag unmistakably read as a Lost Bag, not just another pickup.
+    this.lostBagLabel = this.add.text(x, y - 30, `LOST BAG\n$${value}`, {
+      align: 'center',
+      color: '#ff6b52',
+      fontFamily: 'monospace',
+      fontSize: '13px',
+      fontStyle: '900',
+    }).setOrigin(0.5).setDepth(30)
+
+    if (this.lostBagSprite) {
+      this.tweens.add({
+        targets: this.lostBagSprite,
+        scale: 1.18,
+        duration: 620,
+        yoyo: true,
+        repeat: -1,
+      })
     }
   }
 
   private pickupBag() {
-    if (!this.bagSprite?.active || this.carriedBag > 0) {
+    // Fresh Bag always stacks onto whatever is already carried (incl. a recovered Lost Bag).
+    if (!this.bagSprite?.active) {
       return
     }
 
     this.carriedBag += STARTING_BAG_VALUE
     this.bagSprite.destroy()
-    this.emitFloatingText(this.player?.sprite.x ?? waffleBackroom.bagSpawn.x, this.player?.sprite.y ?? waffleBackroom.bagSpawn.y - 28, 'THE BAG')
-    this.emitHud('THE BAG is hot. Get to the RUG EXIT or get greedy.')
+    this.emitFloatingText(this.player?.sprite.x ?? waffleBackroom.bagSpawn.x, this.player?.sprite.y ?? waffleBackroom.bagSpawn.y - 28, `THE BAG +$${STARTING_BAG_VALUE}`)
+    this.emitHud(`Carrying $${this.carriedBag}. Get to the RUG EXIT or get greedy.`)
     this.updateDebugSnapshot()
   }
 
@@ -153,6 +198,8 @@ export class WaffleBackroomScene extends Phaser.Scene {
     const recovered = this.save.lostBag.value
     this.carriedBag += recovered
     this.lostBagSprite.destroy()
+    this.lostBagLabel?.destroy()
+    this.lostBagLabel = null
     this.save = {
       ...this.save,
       lostBag: null,
@@ -162,8 +209,8 @@ export class WaffleBackroomScene extends Phaser.Scene {
       },
     }
     this.callbacks.onSaveChange(this.save)
-    this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, 'LOST BAG RECOVERED')
-    this.emitHud('Lost Bag recovered. Now leave.')
+    this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `LOST BAG RECOVERED +$${recovered}`, '#46ff9b')
+    this.emitHud(`Lost Bag recovered. Carrying $${this.carriedBag}. Now leave.`)
     this.updateDebugSnapshot()
   }
 
@@ -208,9 +255,9 @@ export class WaffleBackroomScene extends Phaser.Scene {
     })
   }
 
-  private emitFloatingText(x: number, y: number, text: string) {
+  private emitFloatingText(x: number, y: number, text: string, color = '#ffc23a') {
     const label = this.add.text(x, y, text, {
-      color: '#ffc23a',
+      color,
       fontFamily: 'monospace',
       fontSize: '16px',
       fontStyle: '700',
@@ -237,6 +284,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
         velocityX: Math.round(this.player.sprite.body?.velocity.x ?? 0),
         velocityY: Math.round(this.player.sprite.body?.velocity.y ?? 0),
         heldKeys: this.player.getHeldKeys(),
+        facingDegrees: Math.round(Phaser.Math.RadToDeg(this.player.getFacingRadians())),
       },
       enemies: this.enemies.map((enemy) => ({
         id: enemy.sprite.name,
