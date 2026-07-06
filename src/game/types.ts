@@ -335,6 +335,13 @@ export interface GameState {
   runDepth: number
   rugWindowUntil: number
   lastRugEvent: RugEvent | null
+  // v0.6A Chart Hazards: minimal bookkeeping for the FakeChart overlay layer
+  // (see game/chartHazards.ts). Positions are derived from Date.now(); these
+  // only enforce one-hit/one-pickup per timed sequence and drive the obstacle
+  // crash flash. No per-frame reducer updates.
+  lastObstacleSeq: number
+  lastPickupSeq: number
+  obstacleCrashUntil: number
 }
 
 export type GameAction =
@@ -348,3 +355,8 @@ export type GameAction =
   | { type: 'ACK_CARDS' }
   | { type: 'RESET_SAVE' }
   | { type: 'RUG_IT'; now: number }
+  // v0.6A Chart Hazards: discrete overlay events dispatched by FakeChart when
+  // the existing candle-head overlaps the scam gate / Bag pickup. `seq` guards
+  // one-per-sequence; no per-frame dispatch.
+  | { type: 'CHART_OBSTACLE_HIT'; seq: number; now: number }
+  | { type: 'CHART_BAG_PICKUP'; seq: number; now: number }

@@ -3612,3 +3612,108 @@ h2 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* --- v0.6A Chart Hazards: scam-gate obstacle + Bag pickup overlays --------- */
+/* Overlay-only. These sit inside the existing FakeChart SVG; they never touch
+   the candle/snake, chart path, or head. Junk fake-market look — red wires,
+   sell-wall teeth, hazard-striped clamp — deliberately not a platformer pipe. */
+
+.chart-scam-gate .scam-teeth {
+  fill: #10151f;
+  stroke: #000;
+  stroke-width: 1.5;
+}
+
+.chart-scam-gate .scam-tooth {
+  fill: var(--amber);
+  opacity: 0.85;
+}
+
+.chart-scam-gate .scam-wire {
+  stroke: var(--red);
+  stroke-width: 2;
+  stroke-dasharray: 4 4;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 3px rgba(255, 59, 82, 0.7));
+}
+
+.chart-scam-gate .scam-gap {
+  fill: rgba(70, 255, 155, 0.06);
+  stroke: rgba(70, 255, 155, 0.5);
+  stroke-width: 1.2;
+  stroke-dasharray: 3 4;
+}
+
+/* The moment of truth: gap glows green if the head threaded it, red if blocked. */
+.chart-scam-gate.passed .scam-gap {
+  fill: rgba(70, 255, 155, 0.16);
+  stroke: var(--acid);
+}
+
+.chart-scam-gate.blocked .scam-teeth {
+  stroke: var(--red);
+}
+
+.chart-scam-gate.blocked .scam-gap {
+  fill: rgba(255, 59, 82, 0.14);
+  stroke: var(--red);
+}
+
+/* Bag pickup chip — dirty toxic money/receipt chip near the head path. */
+.chart-bag-pickup .bag-chip {
+  fill: rgba(70, 255, 155, 0.16);
+  stroke: var(--acid);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 0 4px rgba(70, 255, 155, 0.45));
+}
+
+.chart-bag-pickup .bag-chip-glyph {
+  fill: var(--acid);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.chart-bag-pickup.caught .bag-chip {
+  animation: chart-pickup-pop 240ms ease-out forwards;
+}
+
+@keyframes chart-pickup-pop {
+  0% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+
+/* Obstacle crash flash — a red slap over the whole chart panel. */
+.chart-panel.scam-hit {
+  animation: chart-scam-slap 320ms ease-out;
+}
+
+.chart-panel.scam-hit::after {
+  content: 'SCAM GATE';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 3;
+  padding: 4px 10px;
+  border: 1px solid var(--red);
+  border-radius: 5px;
+  background: rgba(20, 4, 8, 0.82);
+  color: var(--red);
+  font-size: 0.72rem;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+  animation: chart-scam-label 640ms ease-out forwards;
+}
+
+@keyframes chart-scam-slap {
+  0% { box-shadow: var(--shadow), inset 0 0 0 2px rgba(255, 59, 82, 0.8), inset 0 0 40px rgba(255, 59, 82, 0.35); }
+  100% { box-shadow: var(--shadow); }
+}
+
+@keyframes chart-scam-label {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  20% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}

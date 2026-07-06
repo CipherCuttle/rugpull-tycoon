@@ -14,6 +14,14 @@ import {
   type Candle,
   type ChartState,
 } from '../game/chart'
+import {
+  getChartGate,
+  getChartPickup,
+  GATE_STRIKE_BAND,
+  HAZARD_FROM_FRAC,
+  PICKUP_CATCH_BAND,
+  PICKUP_CATCH_PRICE,
+} from '../game/chartHazards'
 import { getSurfZone, getTierFloor } from '../game/economy'
 import type { BonusTarget, FountainEvent, ResistanceState, TapEffect } from '../game/types'
 import { StreakFountain } from './StreakFountain'
@@ -37,6 +45,13 @@ interface FakeChartProps {
   // v0.4H: true for a brief window right after a crack hit -- drives the
   // Max Payne-style bullet-time pulse (see reducer.ts bulletTimeUntil).
   bulletTime: boolean
+  // v0.6A Chart Hazards: overlay-only obstacle/pickup layer. `launched` gates
+  // collision so the pre-launch screen is untouched; `obstacleCrashUntil` drives
+  // the crash flash; the callbacks dispatch discrete one-per-sequence events.
+  launched: boolean
+  obstacleCrashUntil: number
+  onObstacleHit: (seq: number) => void
+  onPickup: (seq: number) => void
 }
 
 const TAP_FLASH_MS = 220
@@ -69,6 +84,10 @@ export function FakeChart({
   overdrive,
   fountainEvents,
   bulletTime,
+  launched,
+  obstacleCrashUntil,
+  onObstacleHit,
+  onPickup,
 }: FakeChartProps) {
   const clamped = Math.max(0, Math.min(100, progress))
 
@@ -79,6 +98,10 @@ export function FakeChart({
   const lastTapId = useRef<number | null>(null)
   const lastTier = useRef(tier)
   const lastOverdrive = useRef(overdrive)
+  // v0.6A: guards so a hit/pickup dispatches once per sequence even though the
+  // component re-renders every tick while the head sits in the strike window.
+  const firedObstacleSeq = useRef<number | null>(null)
+  const collectedPickupSeq = useRef<number | null>(null)
 
   useEffect(() => {
     if (!tapEffect || tapEffect.id === lastTapId.current) {
@@ -250,6 +273,44 @@ export function FakeChart({
   const wallChunkWidthPx = Math.max(2, (wallX2 - wallX1) / RESISTANCE_MAX_CRACK_PIPS)
   const wallChunkHeightPx = 20
 
+  // v0.6A Chart Hazards — overlay-only obstacle + pickup. Positions come purely
+  // from Date.now() (game/chartHazards.ts); collision reuses the EXISTING
+  // candle-head position (currentCx / chart.price), never a new movement model.
+  const hazardFromX = WIDTH * HAZARD_FROM_FRAC
+  const gate = getChartGate(now)
+  const gateX = hazardFromX + (currentCx - hazardFromX) * gate.progress
+  const gateGapTopY = priceToY(gate.gapCenter + gate.gapHalf)
+  const gateGapBottomY = priceToY(gate.gapCenter - gate.gapHalf)
+  const gateStriking = launched && gate.active && Math.abs(gateX - currentCx) <= GATE_STRIKE_BAND
+  const headInGap = Math.abs(chart.price - gate.gapCenter) <= gate.gapHalf
+  const obstacleHit = gateStriking && !headInGap
+  const scamHit = now < obstacleCrashUntil
+
+  const pickup = getChartPickup(now)
+  const pickupX = hazardFromX + (currentCx - hazardFromX) * pickup.progress
+  const pickupY = priceToY(pickup.price)
+  const pickupCollected = collectedPickupSeq.current === pickup.seq
+  const pickupCatch =
+    launched &&
+    pickup.active &&
+    !pickupCollected &&
+    Math.abs(pickupX - currentCx) <= PICKUP_CATCH_BAND &&
+    Math.abs(chart.price - pickup.price) <= PICKUP_CATCH_PRICE
+
+  useEffect(() => {
+    if (obstacleHit && firedObstacleSeq.current !== gate.seq) {
+      firedObstacleSeq.current = gate.seq
+      onObstacleHit(gate.seq)
+    }
+  }, [obstacleHit, gate.seq, onObstacleHit])
+
+  useEffect(() => {
+    if (pickupCatch && collectedPickupSeq.current !== pickup.seq) {
+      collectedPickupSeq.current = pickup.seq
+      onPickup(pickup.seq)
+    }
+  }, [pickupCatch, pickup.seq, onPickup])
+
   return (
     <section
       className={`chart-panel hero-chart surf-${zone.zone} ${tapFlash ? 'tap-flash' : ''} ${
@@ -263,7 +324,7 @@ export function FakeChart({
       } ${broken ? 'breakout' : ''} ${missed ? 'missed-crack' : ''} ${shattered ? 'shattered' : ''} ${
         brokenPerfect ? 'breakout-perfect' : ''
       } ${rejected ? 'resistance-rejected' : ''
-      } ${bulletTime ? 'bullet-time' : ''}`}
+      } ${bulletTime ? 'bullet-time' : ''} ${scamHit ? 'scam-hit' : ''}`}
       aria-label="Fake chart"
     >
       {gravityFlag ? <span className={`chart-gravity-flag ${gravityFlagKind}`}>{gravityFlag}</span> : null}
@@ -384,6 +445,48 @@ export function FakeChart({
             </g>
           )
         })}
+        {/* v0.6A: scam-gate obstacle — junk sell-wall teeth top & bottom with a
+            clear safe gap, red live wires, and a hazard-striped junk clamp. Draws
+            in the existing SVG coordinate space; never replaces the chart/candles/
+            head. Deliberately NOT a platformer pipe/floor box. */}
+        {launched && gate.active ? (
+          <g
+            className={`chart-scam-gate ${obstacleHit ? 'blocked' : ''} ${gateStriking && headInGap ? 'passed' : ''}`}
+            transform={`translate(${gateX} 0)`}
+            aria-hidden="true"
+          >
+            <rect className="scam-teeth" x={-7} y={0} width={14} height={Math.max(0, gateGapTopY)} rx={2} />
+            <rect
+              className="scam-teeth"
+              x={-7}
+              y={gateGapBottomY}
+              width={14}
+              height={Math.max(0, HEIGHT - gateGapBottomY)}
+              rx={2}
+            />
+            {/* sell-wall teeth biting into the gap */}
+            <path className="scam-tooth" d={`M -7 ${gateGapTopY} L 7 ${gateGapTopY} L 0 ${gateGapTopY + 7} Z`} />
+            <path className="scam-tooth" d={`M -7 ${gateGapBottomY} L 7 ${gateGapBottomY} L 0 ${gateGapBottomY - 7} Z`} />
+            {/* red live wires dangling from each junk block */}
+            <line className="scam-wire" x1={-4} y1={0} x2={-4} y2={gateGapTopY - 4} />
+            <line className="scam-wire" x1={4} y1={gateGapBottomY + 4} x2={4} y2={HEIGHT} />
+            {/* safe passage marker */}
+            <rect className="scam-gap" x={-8} y={gateGapTopY} width={16} height={Math.max(1, gateGapBottomY - gateGapTopY)} rx={2} />
+          </g>
+        ) : null}
+        {/* v0.6A: a dirty Bag pickup chip riding near the head's path. */}
+        {launched && pickup.active && !pickupCollected ? (
+          <g
+            className={`chart-bag-pickup ${pickupCatch ? 'caught' : ''}`}
+            transform={`translate(${pickupX} ${pickupY})`}
+            aria-hidden="true"
+          >
+            <rect className="bag-chip" x={-8} y={-7} width={16} height={14} rx={3} />
+            <text className="bag-chip-glyph" x={0} y={4} textAnchor="middle">
+              $
+            </text>
+          </g>
+        ) : null}
         {bonusVisible ? (
           <g className="chart-bonus-target" transform={`translate(${bonusX} ${bonusY})`} aria-hidden="true">
             <circle className="chart-bonus-ring" r="9" />

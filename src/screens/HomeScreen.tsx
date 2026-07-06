@@ -97,6 +97,10 @@ export function HomeScreen({ state, dispatch }: HomeScreenProps) {
         overdrive={overdrive}
         fountainEvents={state.fountainEvents}
         bulletTime={state.bulletTimeUntil > Date.now()}
+        launched={state.currentCoin.launched}
+        obstacleCrashUntil={state.obstacleCrashUntil}
+        onObstacleHit={(seq) => dispatch({ type: 'CHART_OBSTACLE_HIT', seq, now: Date.now() })}
+        onPickup={(seq) => dispatch({ type: 'CHART_BAG_PICKUP', seq, now: Date.now() })}
       />
       <StreakBurst effect={state.streakEffect} />
 

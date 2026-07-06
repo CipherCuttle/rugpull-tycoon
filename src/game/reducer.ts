@@ -18,6 +18,7 @@ import {
   UPGRADE_LINES,
 } from '../data/tickerLines'
 import { UPGRADES } from '../data/upgrades'
+import { CHART_BAG_PICKUP_VALUE, OBSTACLE_CRASH_MS } from './chartHazards'
 import {
   BREAKOUT_QUALITY_ARM_THRESHOLD,
   BREAKOUT_QUALITY_DECAY_PER_SEC,
@@ -210,6 +211,9 @@ export function createInitialGame(): GameState {
     runDepth: 0,
     rugWindowUntil: 0,
     lastRugEvent: null,
+    lastObstacleSeq: 0,
+    lastPickupSeq: 0,
+    obstacleCrashUntil: 0,
   }
 }
 
@@ -706,6 +710,10 @@ const RUG_WINDOW_LINES = ['BAG BANKED', 'GREASY EXIT', "MOM WON'T KNOW"]
 const RUG_PANIC_LINES = ['PANIC RUG', "MOM WON'T KNOW"]
 const LOST_BAG_LINES = ['JEETS ATE THE BAG', 'WALL ATE THE LIQUIDITY', 'ROOM GOT SOBER', 'BAG FUMBLED', 'MOM CHECKED THE ROUTER']
 const RECOVER_BAG_LINES = ['LOST BAG RECOVERED', 'FOUND THE BAG', 'LIQUIDITY RETURNED', 'THE JEETS DROPPED IT']
+
+// v0.6A Chart Hazards — scam-gate + pickup ticker copy for the FakeChart overlay.
+const SCAM_GATE_LINES = ['SCAM GATE SLAP', 'RUG WIRES CROSSED', 'SELL WALL BIT BACK', 'JUNK CLAMP CAUGHT IT']
+const CHART_PICKUP_LINES = ['SNAGGED A BAG', 'GREASY PICKUP', 'RECEIPT CHIP GRABBED']
 
 // Single non-blocking Bag/Rug event slot — same "one at a time, overwrite the
 // previous" pattern as stampToast, but kept separate so a rug/lost/recovered
@@ -1655,6 +1663,38 @@ function runTick(state: GameState, now: number, dtSeconds = 1): GameState {
   return updateStreakMeters(next, now, boundedDt)
 }
 
+// v0.6A Chart Hazards — the FakeChart overlay dispatches these when the existing
+// candle-head overlaps the scam gate or a Bag pickup. `seq` (derived from the
+// epoch in chartHazards.ts) is monotonic, so `<=` guards one hit / one pickup per
+// timed sequence even across saves. No new physics, no new currency.
+function chartObstacleHit(state: GameState, seq: number, now: number): GameState {
+  if (seq <= state.lastObstacleSeq) {
+    return state
+  }
+
+  let next: GameState = { ...state, lastObstacleSeq: seq, obstacleCrashUntil: now + OBSTACLE_CRASH_MS }
+  next = pushFountain(next, 'SCAM GATE', 'reject')
+  next = addTicker(next, pickLine(SCAM_GATE_LINES, now))
+
+  // Reuse the exact v0.5A Lost Bag behavior: a live bag gets swept, an empty bag
+  // costs nothing (no fake Lost Bag is invented).
+  if (state.runBag > 0) {
+    next = applyMajorFailure(next, pickLine(LOST_BAG_LINES, now))
+  }
+
+  return next
+}
+
+function chartBagPickup(state: GameState, seq: number, now: number): GameState {
+  if (seq <= state.lastPickupSeq) {
+    return state
+  }
+
+  let next: GameState = { ...state, lastPickupSeq: seq, runBag: state.runBag + CHART_BAG_PICKUP_VALUE }
+  next = pushFountain(next, `+$${CHART_BAG_PICKUP_VALUE} BAG`, 'gain')
+  return addTicker(next, `${pickLine(CHART_PICKUP_LINES, now)} +$${CHART_BAG_PICKUP_VALUE} to the bag.`)
+}
+
 export function gameReducer(state: GameState, action: GameAction): GameState {
   switch (action.type) {
     case 'LAUNCH_COIN':
@@ -1677,6 +1717,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return createInitialGame()
     case 'RUG_IT':
       return rugIt(state, action.now)
+    case 'CHART_OBSTACLE_HIT':
+      return chartObstacleHit(state, action.seq, action.now)
+    case 'CHART_BAG_PICKUP':
+      return chartBagPickup(state, action.seq, action.now)
     default:
       return state
   }

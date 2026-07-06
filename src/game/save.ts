@@ -133,6 +133,13 @@ function migrateGameState(value: GameState): GameState {
     runDepth: raw.runDepth ?? 0,
     rugWindowUntil: raw.rugWindowUntil ?? 0,
     lastRugEvent: raw.lastRugEvent ?? null,
+    // v0.6A Chart Hazards: additive. Old saves start with no consumed hazard
+    // sequences and no active crash flash; the seq ids are epoch-derived so any
+    // fresh gate/pickup is monotonically ahead of the 0 default. See the note
+    // above on why SAVE_VERSION is not bumped for additive fields.
+    lastObstacleSeq: raw.lastObstacleSeq ?? 0,
+    lastPickupSeq: raw.lastPickupSeq ?? 0,
+    obstacleCrashUntil: raw.obstacleCrashUntil ?? 0,
   }
 }
 
