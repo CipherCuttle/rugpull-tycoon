@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { JeetSpawn, RoomPoint } from '../types'
+import type { Stunnable } from './combatTargets'
 
 const JEET_SPEED = 150
 const JEET_NOTICE_RANGE = 230
@@ -9,7 +10,7 @@ const STUN_MS = 720
 const KNOCKBACK_SPEED = 780
 const STUN_TINT = 0x8fa2bd
 
-export class EnemyController {
+export class EnemyController implements Stunnable {
   readonly sprite: Phaser.Physics.Arcade.Sprite
 
   private readonly patrol: RoomPoint[]

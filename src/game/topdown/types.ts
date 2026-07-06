@@ -7,11 +7,14 @@ export interface LostBagSnapshot {
   value: number
 }
 
+export type TrashKind = 'frozen-waffle'
+
 export interface TopdownHudState {
   status: string
   rentBanked: number
   carriedBag: number
   lostBag: LostBagSnapshot | null
+  heldTrash: TrashKind | null
   deathCause: string | null
   runState: TopdownRunState
 }
@@ -32,6 +35,21 @@ export interface JeetSpawn extends RoomPoint {
   patrol: RoomPoint[]
 }
 
+export interface AuditorSpawn extends RoomPoint {
+  id: string
+  patrol: RoomPoint[]
+}
+
+export interface TrashSpawn extends RoomPoint {
+  id: string
+  kind: TrashKind
+}
+
+export interface GreedSpawn extends RoomPoint {
+  id: string
+  value: number
+}
+
 export interface TopdownRoomData {
   id: string
   name: string
@@ -45,6 +63,9 @@ export interface TopdownRoomData {
   walls: RoomRect[]
   props: RoomRect[]
   jeets: JeetSpawn[]
+  auditors: AuditorSpawn[]
+  trash: TrashSpawn[]
+  greed: GreedSpawn[]
 }
 
 export interface TopdownSaveV1 {

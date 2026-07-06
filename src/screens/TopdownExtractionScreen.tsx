@@ -10,6 +10,7 @@ const initialHud: TopdownHudState = {
   rentBanked: 0,
   carriedBag: 0,
   lostBag: null,
+  heldTrash: null,
   deathCause: null,
   runState: 'playing',
 }

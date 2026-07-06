@@ -15,6 +15,13 @@ export function createLostBagSprite(scene: Phaser.Scene, lostBag: LostBagSnapsho
   return sprite
 }
 
+export function createGreedSprite(scene: Phaser.Scene, x: number, y: number) {
+  const sprite = scene.physics.add.sprite(x, y, 'greed-gem')
+  sprite.setDepth(14)
+  scene.tweens.add({ targets: sprite, scale: 1.16, duration: 720, yoyo: true, repeat: -1 })
+  return sprite
+}
+
 export function createRugExitZone(scene: Phaser.Scene, exit: RoomRect) {
   const zone = scene.add.zone(exit.x + exit.width / 2, exit.y + exit.height / 2, exit.width, exit.height)
   scene.physics.add.existing(zone, true)

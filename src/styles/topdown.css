@@ -109,6 +109,30 @@
   color: #ff6b52;
 }
 
+.hud-pill.trash {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.hud-pill.trash span {
+  font-size: 0.65rem;
+}
+
+.hud-pill.trash strong {
+  color: rgba(245, 242, 220, 0.7);
+  font-size: 0.9rem;
+}
+
+.hud-pill.trash.is-active {
+  border-color: rgba(231, 169, 67, 0.85);
+}
+
+.hud-pill.trash.is-active strong {
+  color: #e7a943;
+}
+
 .hud-pill.lost.is-active {
   border-color: rgba(255, 107, 82, 0.85);
   animation: hud-lost-pulse 1.1s ease-in-out infinite;
