@@ -23,6 +23,9 @@ export function TopdownHud({ hud }: TopdownHudProps) {
         <span>Lost Bag</span>
         <strong>{hud.lostBag ? formatDollars(hud.lostBag.value) : 'None'}</strong>
       </div>
+      <button className="hud-shove-button" type="button" onClick={() => window.dispatchEvent(new Event('rugpull-topdown-attack'))}>
+        Shove
+      </button>
       <p className={`hud-status hud-status-${hud.runState}`}>{hud.deathCause ?? hud.status}</p>
     </aside>
   )

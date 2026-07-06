@@ -75,7 +75,8 @@
 }
 
 .hud-pill,
-.hud-status {
+.hud-status,
+.hud-shove-button {
   border: 1px solid rgba(255, 255, 255, 0.13);
   background: rgba(4, 6, 10, 0.82);
   padding: 8px 10px;
@@ -104,6 +105,22 @@
   color: #ff6b52;
 }
 
+.hud-shove-button {
+  grid-column: 1 / -1;
+  pointer-events: auto;
+  color: #08040a;
+  background: linear-gradient(180deg, #ffc23a, #ff6b52);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 950;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.hud-shove-button:active {
+  transform: translateY(1px);
+}
+
 .hud-status {
   grid-column: 1 / -1;
   margin: 0;
@@ -111,6 +128,10 @@
   font-size: 0.75rem;
   font-weight: 900;
   text-align: center;
+}
+
+.hud-status-failed {
+  color: #ff6b52;
 }
 
 .topdown-safety {

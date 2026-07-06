@@ -18,6 +18,15 @@ export class BootScene extends Phaser.Scene {
     dust.generateTexture('dust-pawn', 32, 32)
     dust.destroy()
 
+    const jeet = this.make.graphics({ x: 0, y: 0 })
+    jeet.fillStyle(0xff3b52, 1)
+    jeet.fillCircle(16, 16, 13)
+    jeet.fillStyle(0x08040a, 1)
+    jeet.fillCircle(11, 13, 2)
+    jeet.fillCircle(21, 13, 2)
+    jeet.generateTexture('jeet-pawn', 32, 32)
+    jeet.destroy()
+
     this.callbacks.onSliceReady()
     this.scene.start('waffle-backroom')
   }
