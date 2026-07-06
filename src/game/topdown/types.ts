@@ -46,3 +46,21 @@ export interface TopdownRoomData {
   props: RoomRect[]
   jeets: JeetSpawn[]
 }
+
+export interface TopdownSaveV1 {
+  saveVersion: 1
+  rentBanked: number
+  lostBag: LostBagSnapshot | null
+  unlockedDistricts: string[]
+  pawnUpgrades: Record<string, number>
+  stats: {
+    deaths: number
+    escapes: number
+    bagsRecovered: number
+    bestEscapeMsByRoom: Record<string, number>
+  }
+  settings: {
+    sound: boolean
+    reducedMotion: boolean
+  }
+}

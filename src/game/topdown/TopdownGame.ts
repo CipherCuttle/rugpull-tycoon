@@ -2,8 +2,9 @@ import Phaser from 'phaser'
 import type { TopdownGameCallbacks } from './events'
 import { BootScene } from './scenes/BootScene'
 import { WaffleBackroomScene } from './scenes/WaffleBackroomScene'
+import type { TopdownSaveV1 } from './types'
 
-export function mountTopdownGame(parent: HTMLElement, callbacks: TopdownGameCallbacks) {
+export function mountTopdownGame(parent: HTMLElement, save: TopdownSaveV1, callbacks: TopdownGameCallbacks) {
   return new Phaser.Game({
     type: Phaser.AUTO,
     parent,
@@ -22,6 +23,6 @@ export function mountTopdownGame(parent: HTMLElement, callbacks: TopdownGameCall
         debug: false,
       },
     },
-    scene: [new BootScene(callbacks), new WaffleBackroomScene(callbacks)],
+    scene: [new BootScene(callbacks), new WaffleBackroomScene(save, callbacks)],
   })
 }

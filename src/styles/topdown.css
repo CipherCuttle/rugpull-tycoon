@@ -134,6 +134,10 @@
   color: #ff6b52;
 }
 
+.hud-status-escaped {
+  color: #46ff9b;
+}
+
 .topdown-safety {
   width: min(100%, 1120px);
   margin: 10px auto 0;

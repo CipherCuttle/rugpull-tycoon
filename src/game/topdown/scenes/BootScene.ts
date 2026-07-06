@@ -27,6 +27,20 @@ export class BootScene extends Phaser.Scene {
     jeet.generateTexture('jeet-pawn', 32, 32)
     jeet.destroy()
 
+    const bag = this.make.graphics({ x: 0, y: 0 })
+    bag.fillStyle(0xffc23a, 1)
+    bag.fillRoundedRect(5, 9, 22, 18, 5)
+    bag.lineStyle(3, 0x08040a, 1)
+    bag.strokeRoundedRect(5, 9, 22, 18, 5)
+    bag.generateTexture('bag-pawn', 32, 32)
+    bag.clear()
+    bag.fillStyle(0xff3b52, 1)
+    bag.fillRoundedRect(5, 9, 22, 18, 5)
+    bag.lineStyle(3, 0xffc23a, 1)
+    bag.strokeRoundedRect(5, 9, 22, 18, 5)
+    bag.generateTexture('lost-bag-pawn', 32, 32)
+    bag.destroy()
+
     this.callbacks.onSliceReady()
     this.scene.start('waffle-backroom')
   }

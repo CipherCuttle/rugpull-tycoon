@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { TopdownHud } from '../components/topdown/TopdownHud'
 import { mountTopdownGame } from '../game/topdown/TopdownGame'
+import { loadTopdownSave, saveTopdownSave } from '../game/topdown/save'
 import type { TopdownHudState } from '../game/topdown/types'
 import '../styles/topdown.css'
 
@@ -16,6 +17,7 @@ const initialHud: TopdownHudState = {
 export function TopdownExtractionScreen() {
   const gameHostRef = useRef<HTMLDivElement | null>(null)
   const gameRef = useRef<Phaser.Game | null>(null)
+  const saveRef = useRef(loadTopdownSave())
   const [hud, setHud] = useState<TopdownHudState>(initialHud)
 
   useEffect(() => {
@@ -25,8 +27,12 @@ export function TopdownExtractionScreen() {
       return
     }
 
-    gameRef.current = mountTopdownGame(host, {
+    gameRef.current = mountTopdownGame(host, saveRef.current, {
       onHudChange: setHud,
+      onSaveChange: (nextSave) => {
+        saveRef.current = nextSave
+        saveTopdownSave(nextSave)
+      },
       onSliceReady: () => setHud((current) => ({ ...current, status: 'Waffle Mausoleum backroom online.' })),
     })
 
