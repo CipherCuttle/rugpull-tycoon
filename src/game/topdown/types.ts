@@ -1,5 +1,6 @@
 export type TopdownRunState = 'playing' | 'failed' | 'escaped'
 export type HeatTier = 0 | 1 | 2 | 3
+export type RugWindowState = 'no-bag' | 'open' | 'hot' | 'unstable'
 
 export interface LostBagSnapshot {
   roomId: string
@@ -9,6 +10,8 @@ export interface LostBagSnapshot {
 }
 
 export type TrashKind = 'frozen-waffle'
+export type FakeAlphaKind = 'insider-tip' | 'free-mint' | 'green-candle' | 'dev-wallet'
+export type FakeAlphaSideEffect = 'slow' | 'auditor-pulse'
 
 export interface TopdownHudState {
   status: string
@@ -18,6 +21,8 @@ export interface TopdownHudState {
   heldTrash: TrashKind | null
   heatTier: HeatTier
   heatLabel: string
+  rugWindowState: RugWindowState
+  rugWindowLabel: string
   deathCause: string | null
   lastDeathCause: string | null
   runState: TopdownRunState
@@ -49,9 +54,16 @@ export interface TrashSpawn extends RoomPoint {
   kind: TrashKind
 }
 
-export interface GreedSpawn extends RoomPoint {
+export interface FakeAlphaSpawn extends RoomPoint {
   id: string
-  value: number
+  kind: FakeAlphaKind
+  label: string
+  bagValue: number
+  heatBump: number
+  status: string
+  tint: number
+  labelColor: string
+  sideEffect?: FakeAlphaSideEffect
 }
 
 export interface TopdownRoomData {
@@ -69,7 +81,7 @@ export interface TopdownRoomData {
   jeets: JeetSpawn[]
   auditors: AuditorSpawn[]
   trash: TrashSpawn[]
-  greed: GreedSpawn[]
+  fakeAlpha: FakeAlphaSpawn[]
 }
 
 export interface TopdownSaveV1 {

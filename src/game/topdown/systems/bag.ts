@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { LostBagSnapshot, RoomRect, TopdownRoomData } from '../types'
+import type { FakeAlphaSpawn, LostBagSnapshot, RoomRect, TopdownRoomData } from '../types'
 
 export const STARTING_BAG_VALUE = 120
 
@@ -15,9 +15,10 @@ export function createLostBagSprite(scene: Phaser.Scene, lostBag: LostBagSnapsho
   return sprite
 }
 
-export function createGreedSprite(scene: Phaser.Scene, x: number, y: number) {
-  const sprite = scene.physics.add.sprite(x, y, 'greed-gem')
+export function createFakeAlphaSprite(scene: Phaser.Scene, spawn: FakeAlphaSpawn) {
+  const sprite = scene.physics.add.sprite(spawn.x, spawn.y, 'greed-gem')
   sprite.setDepth(14)
+  sprite.setTint(spawn.tint)
   scene.tweens.add({ targets: sprite, scale: 1.16, duration: 720, yoyo: true, repeat: -1 })
   return sprite
 }

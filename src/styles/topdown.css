@@ -174,6 +174,36 @@
   color: #ff6b52;
 }
 
+.hud-pill.rug-window strong {
+  color: #8fa2bd;
+  font-size: 0.82rem;
+}
+
+.hud-pill.rug-window-open {
+  border-color: rgba(70, 255, 155, 0.56);
+}
+
+.hud-pill.rug-window-open strong {
+  color: #46ff9b;
+}
+
+.hud-pill.rug-window-hot {
+  border-color: rgba(255, 194, 58, 0.66);
+}
+
+.hud-pill.rug-window-hot strong {
+  color: #ffc23a;
+}
+
+.hud-pill.rug-window-unstable {
+  border-color: rgba(255, 107, 82, 0.82);
+  animation: rug-window-pulse 720ms ease-in-out infinite;
+}
+
+.hud-pill.rug-window-unstable strong {
+  color: #ff6b52;
+}
+
 @keyframes hud-lost-pulse {
   0%,
   100% {
@@ -181,6 +211,16 @@
   }
   50% {
     box-shadow: 0 0 0 1px rgba(255, 107, 82, 0.9), 0 0 20px rgba(255, 107, 82, 0.42);
+  }
+}
+
+@keyframes rug-window-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px rgba(255, 107, 82, 0.46), 0 0 10px rgba(255, 107, 82, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 0 1px rgba(255, 194, 58, 0.75), 0 0 18px rgba(255, 107, 82, 0.36);
   }
 }
 
@@ -246,7 +286,7 @@
 
   .topdown-quick-strip {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 6px;
     margin-bottom: 8px;
   }
@@ -264,11 +304,23 @@
     text-transform: uppercase;
   }
 
-  .topdown-quick-strip.heat-tier-2 span:last-child {
+  .topdown-quick-strip.heat-tier-2 span:nth-child(3) {
     color: #ffc23a;
   }
 
-  .topdown-quick-strip.heat-tier-3 span:last-child {
+  .topdown-quick-strip.heat-tier-3 span:nth-child(3) {
+    color: #ff6b52;
+  }
+
+  .topdown-quick-strip.rug-window-open span:last-child {
+    color: #46ff9b;
+  }
+
+  .topdown-quick-strip.rug-window-hot span:last-child {
+    color: #ffc23a;
+  }
+
+  .topdown-quick-strip.rug-window-unstable span:last-child {
     color: #ff6b52;
   }
 
@@ -304,6 +356,7 @@
 
   .hud-pill.trash,
   .hud-pill.heat,
+  .hud-pill.rug-window,
   .hud-shove-button {
     grid-column: span 1;
   }
@@ -331,6 +384,7 @@
   }
 
   .hud-pill.heat,
+  .hud-pill.rug-window,
   .hud-shove-button {
     grid-column: span 1;
   }

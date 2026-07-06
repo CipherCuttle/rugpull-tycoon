@@ -4,8 +4,8 @@ import type { TopdownRoomData } from '../types'
 //   start (bottom-left) -> grab THE BAG (top-left) -> squeeze the central CHOKE
 //   past a Jeet -> cross the open arena (rearm on trash) -> run the EXIT CORRIDOR
 //   guarded by the Fake Auditor -> RUG EXIT (far right).
-// The GREED gem is a deliberate detour into the bottom-right Jeet's turf, off the
-// safe exit line, so the player has to choose: bank now or push for more.
+// Fake Alpha pickups are deliberate detours off the safe exit line, so the player
+// has to choose: bank now or push for one more cursed opportunity.
 export const waffleBackroom: TopdownRoomData = {
   id: 'waffle-mausoleum-backroom-v1',
   name: 'Waffle Mausoleum Backroom Extraction',
@@ -55,7 +55,56 @@ export const waffleBackroom: TopdownRoomData = {
     { id: 'trash-start', x: 250, y: 560, kind: 'frozen-waffle' },
     { id: 'trash-mid', x: 730, y: 360, kind: 'frozen-waffle' },
   ],
-  greed: [
-    { id: 'greed-corner', x: 1130, y: 610, value: 25 },
+  fakeAlpha: [
+    {
+      id: 'alpha-insider-tip',
+      kind: 'insider-tip',
+      label: 'INSIDER TIP',
+      x: 500,
+      y: 585,
+      bagValue: 40,
+      heatBump: 1,
+      status: 'INSIDER TIP leaked. Heat noticed.',
+      tint: 0xb6ff4a,
+      labelColor: '#b6ff4a',
+    },
+    {
+      id: 'alpha-free-mint',
+      kind: 'free-mint',
+      label: 'FREE MINT',
+      x: 520,
+      y: 235,
+      bagValue: 25,
+      heatBump: 0,
+      sideEffect: 'slow',
+      status: 'FREE MINT clogged your shoes.',
+      tint: 0x75e4ff,
+      labelColor: '#75e4ff',
+    },
+    {
+      id: 'alpha-green-candle',
+      kind: 'green-candle',
+      label: 'GREEN CANDLE',
+      x: 820,
+      y: 610,
+      bagValue: 35,
+      heatBump: 1,
+      status: 'GREEN CANDLE pumped the room.',
+      tint: 0x46ff9b,
+      labelColor: '#46ff9b',
+    },
+    {
+      id: 'alpha-dev-wallet',
+      kind: 'dev-wallet',
+      label: 'DEV WALLET',
+      x: 1100,
+      y: 520,
+      bagValue: 70,
+      heatBump: 2,
+      sideEffect: 'auditor-pulse',
+      status: 'DEV WALLET exposed. Auditor twitched.',
+      tint: 0xff6b52,
+      labelColor: '#ff6b52',
+    },
   ],
 }

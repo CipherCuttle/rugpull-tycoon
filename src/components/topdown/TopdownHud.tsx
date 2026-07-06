@@ -39,6 +39,10 @@ export function TopdownHud({ hud }: TopdownHudProps) {
         <span>Heat</span>
         <strong>{hud.heatLabel}</strong>
       </div>
+      <div className={`hud-pill rug-window rug-window-${hud.rugWindowState}`}>
+        <span>RUG Window</span>
+        <strong>{hud.rugWindowLabel}</strong>
+      </div>
       <button className="hud-shove-button" type="button" onClick={() => window.dispatchEvent(new Event('rugpull-topdown-attack'))}>
         {actionLabel}
       </button>
