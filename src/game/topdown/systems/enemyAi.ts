@@ -27,7 +27,7 @@ export class EnemyController implements Stunnable {
     body.setCircle(13, 3, 3)
   }
 
-  update(now: number, player: Phaser.Physics.Arcade.Sprite) {
+  update(now: number, player: Phaser.Physics.Arcade.Sprite, speedMultiplier = 1) {
     if (now < this.stunnedUntil) {
       const body = this.sprite.body as Phaser.Physics.Arcade.Body
       // Stunned Jeets read as dazed: cold grey-blue tint + faded, sliding to a stop.
@@ -50,13 +50,13 @@ export class EnemyController implements Stunnable {
     if (distanceToPlayer <= JEET_NOTICE_RANGE) {
       this.sprite.setTint(0xff6b52)
       toPlayer.normalize()
-      this.sprite.setVelocity(toPlayer.x * JEET_SPEED, toPlayer.y * JEET_SPEED)
+      this.sprite.setVelocity(toPlayer.x * JEET_SPEED * speedMultiplier, toPlayer.y * JEET_SPEED * speedMultiplier)
       this.sprite.setRotation(toPlayer.angle())
       return null
     }
 
     this.sprite.clearTint()
-    this.patrolStep()
+    this.patrolStep(speedMultiplier)
     return null
   }
 
@@ -76,7 +76,7 @@ export class EnemyController implements Stunnable {
     return now < this.stunnedUntil
   }
 
-  private patrolStep() {
+  private patrolStep(speedMultiplier: number) {
     const target = this.patrol[this.patrolIndex]
     if (!target) {
       this.sprite.setVelocity(0, 0)
@@ -91,7 +91,7 @@ export class EnemyController implements Stunnable {
     }
 
     toTarget.normalize()
-    this.sprite.setVelocity(toTarget.x * JEET_SPEED * 0.55, toTarget.y * JEET_SPEED * 0.55)
+    this.sprite.setVelocity(toTarget.x * JEET_SPEED * 0.55 * speedMultiplier, toTarget.y * JEET_SPEED * 0.55 * speedMultiplier)
     this.sprite.setRotation(toTarget.angle())
   }
 }

@@ -1,4 +1,5 @@
 export type TopdownRunState = 'playing' | 'failed' | 'escaped'
+export type HeatTier = 0 | 1 | 2 | 3
 
 export interface LostBagSnapshot {
   roomId: string
@@ -15,7 +16,10 @@ export interface TopdownHudState {
   carriedBag: number
   lostBag: LostBagSnapshot | null
   heldTrash: TrashKind | null
+  heatTier: HeatTier
+  heatLabel: string
   deathCause: string | null
+  lastDeathCause: string | null
   runState: TopdownRunState
 }
 

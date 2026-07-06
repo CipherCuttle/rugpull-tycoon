@@ -11,8 +11,15 @@ const initialHud: TopdownHudState = {
   carriedBag: 0,
   lostBag: null,
   heldTrash: null,
+  heatTier: 0,
+  heatLabel: 'Cold / Broke',
   deathCause: null,
+  lastDeathCause: null,
   runState: 'playing',
+}
+
+function formatDollars(value: number) {
+  return `$${Math.round(value).toLocaleString('en-US')}`
 }
 
 export function TopdownExtractionScreen() {
@@ -55,10 +62,20 @@ export function TopdownExtractionScreen() {
         </a>
       </header>
 
-      <section className="topdown-stage" aria-label="Top-down extraction game">
-        <div ref={gameHostRef} className="topdown-game-host" />
-        <TopdownHud hud={hud} />
-      </section>
+      <div className="topdown-cabinet">
+        <div className={`topdown-quick-strip heat-tier-${hud.heatTier}`} aria-label="Compact run status">
+          <span>Bag {formatDollars(hud.carriedBag)}</span>
+          <span>Rent {formatDollars(hud.rentBanked)}</span>
+          <span>Heat {hud.heatLabel}</span>
+        </div>
+
+        <div className="topdown-play-layout">
+          <section className="topdown-stage" aria-label="Top-down extraction game">
+            <div ref={gameHostRef} className="topdown-game-host" />
+          </section>
+          <TopdownHud hud={hud} />
+        </div>
+      </div>
 
       <footer className="topdown-safety">
         Fictional arcade satire. No wallets. No trading. No deposits. No withdrawals.

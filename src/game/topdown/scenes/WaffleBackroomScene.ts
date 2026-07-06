@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { waffleBackroom } from '../data/waffleBackroom.v1'
 import { updateTopdownDebug, updateTopdownDebugActions } from '../debug'
 import type { TopdownGameCallbacks } from '../events'
-import type { TopdownSaveV1, TrashKind } from '../types'
+import type { HeatTier, TopdownSaveV1, TrashKind } from '../types'
 import { AuditorController } from '../systems/auditor'
 import { CombatController } from '../systems/combat'
 import type { Stunnable } from '../systems/combatTargets'
@@ -19,6 +19,23 @@ import {
 } from '../systems/bag'
 import { buildRoomCollision, drawRoomBackdrop } from '../systems/roomLoader'
 
+const HEAT_TIERS: Array<{ tier: HeatTier, min: number, label: string, speedMultiplier: number }> = [
+  { tier: 0, min: 0, label: 'Cold / Broke', speedMultiplier: 1 },
+  { tier: 1, min: 1, label: 'Warm Bag', speedMultiplier: 1.04 },
+  { tier: 2, min: 120, label: 'Hot Bag', speedMultiplier: 1.08 },
+  { tier: 3, min: 170, label: 'Nuclear Bag', speedMultiplier: 1.12 },
+]
+
+function getBagHeat(carriedBag: number) {
+  let heat = HEAT_TIERS[0]
+  for (const tier of HEAT_TIERS) {
+    if (carriedBag >= tier.min) {
+      heat = tier
+    }
+  }
+  return heat
+}
+
 export class WaffleBackroomScene extends Phaser.Scene {
   private save: TopdownSaveV1
   private readonly callbacks: TopdownGameCallbacks
@@ -32,6 +49,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
   private lostBagLabel: Phaser.GameObjects.Text | null = null
   private heldTrash: TrashKind | null = null
   private carriedBag = 0
+  private heatTier: HeatTier = 0
   private startedAt = 0
   private failed = false
   private escaped = false
@@ -53,6 +71,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.lostBagLabel = null
     this.heldTrash = null
     this.carriedBag = 0
+    this.heatTier = 0
     this.failed = false
     this.escaped = false
 
@@ -101,7 +120,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
       ? `Your LOST BAG ($${lostBagValue}) is still out there. Grab THE BAG and go get it back.`
       : 'Grab THE BAG, throw trash, shove Jeets, and reach the RUG EXIT.'
     if (lastDeathCause) {
-      this.emitHud('Back in. Grab THE BAG.', 'failed', lastDeathCause)
+      this.emitHud('Back in. Grab THE BAG.', 'playing', null, lastDeathCause)
       this.time.delayedCall(2600, () => {
         if (!this.failed && !this.escaped) {
           this.emitHud(settledHint)
@@ -125,7 +144,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.trash?.update(now, targets)
 
     for (const enemy of this.enemies) {
-      const cause = enemy.update(now, this.player.sprite)
+      const cause = enemy.update(now, this.player.sprite, getBagHeat(this.carriedBag).speedMultiplier)
       if (cause) {
         this.failRun(cause)
         return
@@ -176,7 +195,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.cameras.main.flash(150, 120, 20, 30)
     this.cameras.main.shake(220, 0.017)
     const deathCause = droppedValue > 0
-      ? `${cause} — LOST BAG DROPPED, recover $${droppedValue}`
+      ? `${cause} — LOST BAG DROPPED — recover $${droppedValue}`
       : cause
     if (droppedValue > 0) {
       this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `LOST BAG DROPPED -$${droppedValue}`, '#ff6b52')
@@ -249,6 +268,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     }
 
     this.carriedBag += STARTING_BAG_VALUE
+    this.syncHeatFeedback()
     this.bagSprite.destroy()
     this.emitFloatingText(this.player?.sprite.x ?? waffleBackroom.bagSpawn.x, this.player?.sprite.y ?? waffleBackroom.bagSpawn.y - 28, `THE BAG +$${STARTING_BAG_VALUE}`)
     this.emitHud(`Carrying $${this.carriedBag}. Get to the RUG EXIT or get greedy.`)
@@ -261,6 +281,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     }
 
     this.carriedBag += value
+    this.syncHeatFeedback()
     sprite.destroy()
     this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `GREED +$${value}`, '#46ff9b')
     this.emitHud(`Greedy. Carrying $${this.carriedBag}. Now survive the way out.`)
@@ -271,6 +292,8 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.heldTrash = held
     if (held) {
       this.emitHud(`Picked up ${TRASH_LABELS[held]}. Left-click / SHOVE to throw.`)
+    } else {
+      this.emitHud('Trash thrown. Keep moving.')
     }
     this.updateDebugSnapshot()
   }
@@ -293,6 +316,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
 
     const recovered = this.save.lostBag.value
     this.carriedBag += recovered
+    this.syncHeatFeedback()
     this.lostBagSprite.destroy()
     this.lostBagLabel?.destroy()
     this.lostBagLabel = null
@@ -319,6 +343,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     const elapsed = Math.max(1, Math.round(this.time.now - this.startedAt))
     const previousBest = this.save.stats.bestEscapeMsByRoom[waffleBackroom.id]
     this.carriedBag = 0
+    this.syncHeatFeedback()
     this.escaped = true
     this.save = {
       ...this.save,
@@ -340,15 +365,66 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.time.delayedCall(650, () => this.scene.restart())
   }
 
-  private emitHud(status: string, runState: 'playing' | 'failed' | 'escaped' = 'playing', deathCause: string | null = null) {
+  private emitHud(
+    status: string,
+    runState: 'playing' | 'failed' | 'escaped' = 'playing',
+    deathCause: string | null = null,
+    lastDeathCause: string | null = null,
+  ) {
+    const heat = getBagHeat(this.carriedBag)
     this.callbacks.onHudChange({
       status,
       rentBanked: this.save.rentBanked,
       carriedBag: this.carriedBag,
       lostBag: this.save.lostBag,
       heldTrash: this.heldTrash,
+      heatTier: heat.tier,
+      heatLabel: heat.label,
       deathCause,
+      lastDeathCause,
       runState,
+    })
+  }
+
+  private syncHeatFeedback() {
+    const nextHeat = getBagHeat(this.carriedBag)
+    if (nextHeat.tier === this.heatTier) {
+      return
+    }
+
+    const previousTier = this.heatTier
+    this.heatTier = nextHeat.tier
+    if (nextHeat.tier > previousTier && nextHeat.tier >= 2) {
+      this.pulseHeatEdges(nextHeat.tier)
+    }
+  }
+
+  private pulseHeatEdges(tier: HeatTier) {
+    const width = this.scale.width
+    const height = this.scale.height
+    const alpha = tier === 3 ? 0.18 : 0.1
+    const color = tier === 3 ? 0xff3b52 : 0xff6b52
+    const edgeDepth = 80
+    const edges = [
+      this.add.rectangle(width / 2, 4, width, 8, color, alpha),
+      this.add.rectangle(width / 2, height - 4, width, 8, color, alpha),
+      this.add.rectangle(4, height / 2, 8, height, color, alpha),
+      this.add.rectangle(width - 4, height / 2, 8, height, color, alpha),
+    ]
+
+    for (const edge of edges) {
+      edge.setScrollFactor(0).setDepth(edgeDepth)
+    }
+
+    this.tweens.add({
+      targets: edges,
+      alpha: 0,
+      duration: 360,
+      onComplete: () => {
+        for (const edge of edges) {
+          edge.destroy()
+        }
+      },
     })
   }
 
@@ -390,6 +466,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
         stunned: target.isStunned(this.time.now),
       })),
       carriedBag: this.carriedBag,
+      heatTier: getBagHeat(this.carriedBag).tier,
       save: this.save,
       failed: this.failed,
       escaped: this.escaped,

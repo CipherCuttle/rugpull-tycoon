@@ -14,8 +14,11 @@ function formatDollars(value: number) {
 
 export function TopdownHud({ hud }: TopdownHudProps) {
   const trashLabel = hud.heldTrash ? TRASH_LABELS[hud.heldTrash] : 'none'
+  const statusText = hud.deathCause ?? hud.lastDeathCause ?? hud.status
+  const actionLabel = hud.heldTrash ? `Throw ${TRASH_LABELS[hud.heldTrash]}` : 'Shove'
+
   return (
-    <aside className="topdown-hud" aria-label="Run status">
+    <aside className={`topdown-hud heat-tier-${hud.heatTier}`} aria-label="Run status">
       <div className="hud-pill">
         <span>Carried Bag</span>
         <strong>{formatDollars(hud.carriedBag)}</strong>
@@ -32,10 +35,14 @@ export function TopdownHud({ hud }: TopdownHudProps) {
         <span>Trash</span>
         <strong>{trashLabel}</strong>
       </div>
+      <div className={`hud-pill heat heat-${hud.heatTier}`}>
+        <span>Heat</span>
+        <strong>{hud.heatLabel}</strong>
+      </div>
       <button className="hud-shove-button" type="button" onClick={() => window.dispatchEvent(new Event('rugpull-topdown-attack'))}>
-        {hud.heldTrash ? `Throw ${TRASH_LABELS[hud.heldTrash]}` : 'Shove'}
+        {actionLabel}
       </button>
-      <p className={`hud-status hud-status-${hud.runState}`}>{hud.deathCause ?? hud.status}</p>
+      <p className={`hud-status hud-status-${hud.runState}`}>{statusText}</p>
     </aside>
   )
 }
