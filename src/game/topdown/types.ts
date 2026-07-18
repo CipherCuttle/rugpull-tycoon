@@ -1,6 +1,22 @@
 export type TopdownRunState = 'playing' | 'failed' | 'escaped'
 export type HeatTier = 0 | 1 | 2 | 3
 export type RugWindowState = 'no-bag' | 'open' | 'hot' | 'unstable'
+export type RoomId = 'grease-entrance' | 'side-greed' | 'rug-exit'
+
+export interface RoomDefinition {
+  id: RoomId
+  name: string
+  bounds: RoomRect
+  spawn: RoomPoint
+  safeDrop: RoomPoint
+}
+
+export interface FloorResult {
+  banked: number
+  fakeAlphaTaken: number
+  lostBagRecovered: boolean
+  deaths: number
+}
 
 export interface LostBagSnapshot {
   roomId: string
@@ -26,6 +42,7 @@ export interface TopdownHudState {
   deathCause: string | null
   lastDeathCause: string | null
   runState: TopdownRunState
+  floorResult: FloorResult | null
 }
 
 export interface RoomPoint {
@@ -82,6 +99,7 @@ export interface TopdownRoomData {
   auditors: AuditorSpawn[]
   trash: TrashSpawn[]
   fakeAlpha: FakeAlphaSpawn[]
+  rooms: RoomDefinition[]
 }
 
 export interface TopdownSaveV1 {

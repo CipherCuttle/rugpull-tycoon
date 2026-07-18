@@ -46,6 +46,15 @@ export function TopdownHud({ hud }: TopdownHudProps) {
       <button className="hud-shove-button" type="button" onClick={() => window.dispatchEvent(new Event('rugpull-topdown-attack'))}>
         {actionLabel}
       </button>
+      {hud.floorResult && (
+        <div className="hud-floor-result" aria-label="Extraction result">
+          <strong>Floor Extracted</strong>
+          <span>Rent Banked +{formatDollars(hud.floorResult.banked)}</span>
+          <span>Fake Alpha Taken: {hud.floorResult.fakeAlphaTaken}</span>
+          <span>Lost Bag Recovered: {hud.floorResult.lostBagRecovered ? 'YES' : 'NO'}</span>
+          <span>Deaths This Floor: {hud.floorResult.deaths}</span>
+        </div>
+      )}
       <p className={`hud-status hud-status-${hud.runState}`}>{statusText}</p>
     </aside>
   )

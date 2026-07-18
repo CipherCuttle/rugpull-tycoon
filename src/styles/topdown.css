@@ -98,11 +98,26 @@
 
 .hud-pill,
 .hud-status,
-.hud-shove-button {
+.hud-shove-button,
+.hud-floor-result {
   border: 1px solid rgba(255, 255, 255, 0.13);
   background: rgba(4, 6, 10, 0.82);
   padding: 8px 10px;
   text-transform: uppercase;
+}
+
+.hud-floor-result {
+  display: grid;
+  gap: 4px;
+  border-color: rgba(70, 255, 155, 0.56);
+  color: rgba(245, 242, 220, 0.78);
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
+.hud-floor-result strong {
+  color: #46ff9b;
+  font-size: 0.82rem;
 }
 
 .hud-pill {
