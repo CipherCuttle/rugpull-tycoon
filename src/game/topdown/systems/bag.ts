@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { FakeAlphaSpawn, LostBagSnapshot, RoomRect, TopdownRoomData } from '../types'
+import type { FakeAlphaSpawn, LostBagSnapshot, RoomId, RoomRect, RoomPoint } from '../types'
 
 export const STARTING_BAG_VALUE = 120
 
@@ -29,11 +29,11 @@ export function createRugExitZone(scene: Phaser.Scene, exit: RoomRect) {
   return zone
 }
 
-export function createLostBagSnapshot(room: TopdownRoomData, x: number, y: number, value: number): LostBagSnapshot {
+export function createLostBagSnapshot(roomId: RoomId, point: RoomPoint, value: number): LostBagSnapshot {
   return {
-    roomId: room.id,
-    x: Math.round(x),
-    y: Math.round(y),
+    roomId,
+    x: Math.round(point.x),
+    y: Math.round(point.y),
     value,
   }
 }

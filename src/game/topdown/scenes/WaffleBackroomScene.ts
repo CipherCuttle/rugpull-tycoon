@@ -2,7 +2,7 @@ import Phaser from 'phaser'
 import { waffleBackroom } from '../data/waffleBackroom.v1'
 import { updateTopdownDebug, updateTopdownDebugActions } from '../debug'
 import type { TopdownGameCallbacks } from '../events'
-import type { FakeAlphaSpawn, HeatTier, RoomRect, RugWindowState, TopdownSaveV1, TrashKind } from '../types'
+import type { FakeAlphaSpawn, FloorResult, HeatTier, RoomId, RoomRect, RugWindowState, TopdownSaveV1, TrashKind } from '../types'
 import { AuditorController } from '../systems/auditor'
 import { CombatController } from '../systems/combat'
 import type { Stunnable } from '../systems/combatTargets'
@@ -17,7 +17,7 @@ import {
   createLostBagSprite,
   createRugExitZone,
 } from '../systems/bag'
-import { buildRoomCollision, drawRoomBackdrop } from '../systems/roomLoader'
+import { buildRoomCollision, drawRoomBackdrop, getRoomAtPosition, resolveSafeRoomPoint } from '../systems/roomLoader'
 
 const HEAT_PRESSURE_VALUE = 20
 const FREE_MINT_SPEED_MULTIPLIER = 0.85
@@ -75,6 +75,11 @@ export class WaffleBackroomScene extends Phaser.Scene {
   private startedAt = 0
   private failed = false
   private escaped = false
+  private activeRoomId: RoomId = 'grease-entrance'
+  private fakeAlphaTaken = 0
+  private lostBagRecoveredThisRun = false
+  private deathsThisFloor = 0
+  private floorResult: FloorResult | null = null
 
   constructor(save: TopdownSaveV1, callbacks: TopdownGameCallbacks) {
     super('waffle-backroom')
@@ -100,6 +105,12 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.rugWindowState = 'no-bag'
     this.failed = false
     this.escaped = false
+    this.activeRoomId = 'grease-entrance'
+    this.fakeAlphaTaken = 0
+    this.lostBagRecoveredThisRun = false
+    this.floorResult = null
+    const sceneData = this.scene.settings.data as { deathsThisFloor?: number } | undefined
+    this.deathsThisFloor = sceneData?.deathsThisFloor ?? 0
 
     const room = waffleBackroom
     this.physics.world.setBounds(0, 0, room.world.width, room.world.height)
@@ -141,10 +152,10 @@ export class WaffleBackroomScene extends Phaser.Scene {
     // Carry the last death cause into the fresh run so it stays readable after a fast restart.
     const data = this.scene.settings.data as { lastDeathCause?: string } | undefined
     const lastDeathCause = data?.lastDeathCause ?? null
-    const lostBagValue = this.save.lostBag?.roomId === room.id ? this.save.lostBag.value : 0
+    const lostBagValue = this.save.lostBag?.value ?? 0
     const settledHint = lostBagValue > 0
-      ? `Your LOST BAG ($${lostBagValue}) is still out there. Grab THE BAG and go get it back.`
-      : 'Grab THE BAG, throw trash, shove Jeets, and reach the RUG EXIT.'
+      ? `LOST BAG ($${lostBagValue}) is in the room where you dropped it. Grab THE BAG and go get it back.`
+      : 'Grease Entrance → Side Greed → RUG EXIT. Grab THE BAG, then decide how greedy to get.'
     if (lastDeathCause) {
       this.emitHud('Back in. Grab THE BAG.', 'playing', null, lastDeathCause)
       this.time.delayedCall(2600, () => {
@@ -166,6 +177,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     const now = this.time.now
     const targets: Stunnable[] = [...this.enemies, ...this.auditors]
     this.player?.update()
+    this.updateActiveRoom()
     this.combat?.update(now, targets)
     this.trash?.update(now, targets)
 
@@ -197,9 +209,14 @@ export class WaffleBackroomScene extends Phaser.Scene {
     // LOST BAG RULE: dying while carrying value drops a NEW Lost Bag at the death
     // spot, which REPLACES any older un-recovered Lost Bag (only one is tracked).
     // Dying empty-handed leaves the previous Lost Bag right where it was.
+    const deathPoint = resolveSafeRoomPoint(waffleBackroom, this.activeRoomId, {
+      x: this.player?.sprite.x ?? waffleBackroom.playerSpawn.x,
+      y: this.player?.sprite.y ?? waffleBackroom.playerSpawn.y,
+    })
     const droppedBag = droppedValue > 0
-      ? createLostBagSnapshot(waffleBackroom, this.player?.sprite.x ?? waffleBackroom.playerSpawn.x, this.player?.sprite.y ?? waffleBackroom.playerSpawn.y, droppedValue)
+      ? createLostBagSnapshot(this.activeRoomId, deathPoint, droppedValue)
       : this.save.lostBag
+    this.deathsThisFloor += 1
     this.carriedBag = 0
     this.heatPressure = 0
     this.syncHeatFeedback()
@@ -230,7 +247,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     }
     this.emitHud('Restarting...', 'failed', deathCause)
     this.updateDebugSnapshot()
-    this.time.delayedCall(520, () => this.scene.restart({ lastDeathCause: deathCause }))
+    this.time.delayedCall(520, () => this.scene.restart({ lastDeathCause: deathCause, deathsThisFloor: this.deathsThisFloor }))
   }
 
   private createBagLoop() {
@@ -258,7 +275,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
       this.physics.add.overlap(this.player.sprite, sprite, () => this.pickupFakeAlpha(sprite, alpha))
     }
 
-    if (this.save.lostBag?.roomId === room.id) {
+    if (this.save.lostBag && room.rooms.some((candidate) => candidate.id === this.save.lostBag?.roomId)) {
       this.lostBagSprite = createLostBagSprite(this, this.save.lostBag)
       this.physics.add.overlap(this.player.sprite, this.lostBagSprite, () => this.recoverLostBag())
       this.spawnLostBagMarker(this.save.lostBag.x, this.save.lostBag.y, this.save.lostBag.value)
@@ -312,6 +329,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
 
     this.carriedBag += alpha.bagValue
     this.heatPressure += alpha.heatBump
+    this.fakeAlphaTaken += 1
     this.syncHeatFeedback()
     sprite.destroy()
     this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `${alpha.label} +$${alpha.bagValue}`, alpha.labelColor)
@@ -383,6 +401,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
         bagsRecovered: this.save.stats.bagsRecovered + 1,
       },
     }
+    this.lostBagRecoveredThisRun = true
     this.callbacks.onSaveChange(this.save)
     this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `LOST BAG RECOVERED +$${recovered}`, '#46ff9b')
     this.emitHud(`Lost Bag recovered. Carrying $${this.carriedBag}. Now leave.`)
@@ -416,6 +435,12 @@ export class WaffleBackroomScene extends Phaser.Scene {
     this.callbacks.onSaveChange(this.save)
     this.cameras.main.flash(180, 70, 255, 155)
     this.emitFloatingText(this.player?.sprite.x ?? 0, this.player?.sprite.y ?? 0, `+$${banked} RENT`)
+    this.floorResult = {
+      banked,
+      fakeAlphaTaken: this.fakeAlphaTaken,
+      lostBagRecovered: this.lostBagRecoveredThisRun,
+      deaths: this.deathsThisFloor,
+    }
     this.emitHud('RUG EXIT hit. Rent banked.', 'escaped')
     this.updateDebugSnapshot()
     this.time.delayedCall(650, () => this.scene.restart())
@@ -441,7 +466,26 @@ export class WaffleBackroomScene extends Phaser.Scene {
       deathCause,
       lastDeathCause,
       runState,
+      floorResult: this.floorResult,
     })
+  }
+
+  private updateActiveRoom() {
+    if (!this.player) {
+      return
+    }
+
+    const nextRoomId = getRoomAtPosition(waffleBackroom, this.player.sprite)
+    if (nextRoomId === this.activeRoomId) {
+      return
+    }
+
+    this.activeRoomId = nextRoomId
+    const room = waffleBackroom.rooms.find((candidate) => candidate.id === nextRoomId)
+    if (room) {
+      this.emitHud(`${room.name}. Keep the exit route in sight.`)
+      this.emitFloatingText(this.player.sprite.x, this.player.sprite.y - 28, room.name.toUpperCase(), '#b6ff4a')
+    }
   }
 
   private syncHeatFeedback() {
@@ -581,7 +625,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
     }
 
     updateTopdownDebug({
-      roomId: waffleBackroom.id,
+      roomId: this.activeRoomId,
       player: {
         x: Math.round(this.player.sprite.x),
         y: Math.round(this.player.sprite.y),
@@ -614,6 +658,7 @@ export class WaffleBackroomScene extends Phaser.Scene {
         this.player.sprite.setPosition(x, y)
         this.player.sprite.setVelocity(0, 0)
         this.physics.world.update(this.time.now, 16)
+        this.updateActiveRoom()
         this.updateDebugSnapshot()
       },
       forceFailure: (cause: string) => this.failRun(cause),

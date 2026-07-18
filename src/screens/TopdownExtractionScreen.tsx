@@ -18,6 +18,7 @@ const initialHud: TopdownHudState = {
   deathCause: null,
   lastDeathCause: null,
   runState: 'playing',
+  floorResult: null,
 }
 
 function formatDollars(value: number) {

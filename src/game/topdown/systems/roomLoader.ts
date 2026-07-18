@@ -1,5 +1,5 @@
 import Phaser from 'phaser'
-import type { RoomRect, TopdownRoomData } from '../types'
+import type { RoomPoint, RoomRect, RoomId, TopdownRoomData } from '../types'
 
 const WALL_COLOR = 0x17202a
 const PROP_COLOR = 0x21161a
@@ -35,13 +35,17 @@ export function buildRoomCollision(scene: Phaser.Scene, room: TopdownRoomData) {
 
 export function drawRoomBackdrop(scene: Phaser.Scene, room: TopdownRoomData) {
   scene.add.rectangle(room.world.width / 2, room.world.height / 2, room.world.width, room.world.height, 0x070a0e)
-  scene.add.rectangle(room.world.width / 2, 66, room.world.width - 96, 48, 0x160b12, 0.96).setStrokeStyle(2, 0xff3b52, 0.55)
-  scene.add.text(room.world.width / 2, 65, room.name.toUpperCase(), {
-    color: '#b6ff4a',
-    fontFamily: 'monospace',
-    fontSize: '22px',
-    fontStyle: '700',
-  }).setOrigin(0.5)
+  for (const definition of room.rooms) {
+    const { bounds } = definition
+    scene.add.rectangle(bounds.x + bounds.width / 2, bounds.y + 28, bounds.width - 20, 42, 0x160b12, 0.96)
+      .setStrokeStyle(2, 0xff3b52, 0.55)
+    scene.add.text(bounds.x + bounds.width / 2, bounds.y + 28, definition.name.toUpperCase(), {
+      color: '#b6ff4a',
+      fontFamily: 'monospace',
+      fontSize: '16px',
+      fontStyle: '700',
+    }).setOrigin(0.5)
+  }
 
   scene.add.rectangle(
     room.rugExit.x + room.rugExit.width / 2,
@@ -58,4 +62,21 @@ export function drawRoomBackdrop(scene: Phaser.Scene, room: TopdownRoomData) {
     fontSize: '16px',
     fontStyle: '700',
   }).setOrigin(0.5)
+}
+
+export function getRoomAtPosition(room: TopdownRoomData, point: RoomPoint): RoomId {
+  const found = room.rooms.find(({ bounds }) => (
+    point.x >= bounds.x && point.x <= bounds.x + bounds.width &&
+    point.y >= bounds.y && point.y <= bounds.y + bounds.height
+  ))
+  return found?.id ?? 'grease-entrance'
+}
+
+export function resolveSafeRoomPoint(room: TopdownRoomData, roomId: RoomId, point: RoomPoint): RoomPoint {
+  const definition = room.rooms.find((candidate) => candidate.id === roomId) ?? room.rooms[0]
+  const inset = 28
+  return {
+    x: Phaser.Math.Clamp(point.x, definition.bounds.x + inset, definition.bounds.x + definition.bounds.width - inset),
+    y: Phaser.Math.Clamp(point.y, definition.bounds.y + inset, definition.bounds.y + definition.bounds.height - inset),
+  }
 }

@@ -13,6 +13,11 @@ export const waffleBackroom: TopdownRoomData = {
     width: 1280,
     height: 720,
   },
+  rooms: [
+    { id: 'grease-entrance', name: 'Grease Entrance', bounds: { id: 'grease-entrance', x: 68, y: 60, width: 352, height: 600 }, spawn: { x: 150, y: 560 }, safeDrop: { x: 220, y: 520 } },
+    { id: 'side-greed', name: 'Side Greed Room', bounds: { id: 'side-greed', x: 420, y: 60, width: 400, height: 600 }, spawn: { x: 470, y: 360 }, safeDrop: { x: 520, y: 360 } },
+    { id: 'rug-exit', name: 'RUG EXIT Room', bounds: { id: 'rug-exit', x: 820, y: 60, width: 392, height: 600 }, spawn: { x: 860, y: 360 }, safeDrop: { x: 900, y: 360 } },
+  ],
   playerSpawn: { x: 170, y: 560 },
   bagSpawn: { x: 320, y: 200 },
   rugExit: {
@@ -28,11 +33,11 @@ export const waffleBackroom: TopdownRoomData = {
     { id: 'west-wall', x: 40, y: 32, width: 28, height: 656 },
     { id: 'east-wall-top', x: 1212, y: 32, width: 28, height: 260 },
     { id: 'east-wall-bottom', x: 1212, y: 428, width: 28, height: 260 },
-    // Central spine splits the room; the y270..450 gap is the only crossing (a choke).
-    { id: 'spine-upper', x: 600, y: 60, width: 26, height: 210 },
-    { id: 'spine-lower', x: 600, y: 450, width: 26, height: 210 },
-    // Exit corridor: sealed top and bottom so the RUG EXIT can only be reached by
-    // running the auditor's lane — no sneaking around the pocket.
+    // Door openings at each room seam keep the three spaces physically connected.
+    { id: 'entrance-door-top', x: 400, y: 60, width: 20, height: 210 },
+    { id: 'entrance-door-bottom', x: 400, y: 450, width: 20, height: 210 },
+    { id: 'side-door-top', x: 800, y: 60, width: 20, height: 210 },
+    { id: 'side-door-bottom', x: 800, y: 450, width: 20, height: 210 },
     { id: 'exit-corridor-top', x: 900, y: 250, width: 312, height: 22 },
     { id: 'exit-corridor-bottom', x: 900, y: 456, width: 312, height: 22 },
   ],
@@ -44,7 +49,7 @@ export const waffleBackroom: TopdownRoomData = {
     { id: 'grease-pillar', x: 816, y: 336, width: 54, height: 54 },
   ],
   jeets: [
-    { id: 'jeet-a', x: 660, y: 360, patrol: [{ x: 660, y: 300 }, { x: 660, y: 420 }] },
+    { id: 'jeet-a', x: 560, y: 360, patrol: [{ x: 500, y: 300 }, { x: 620, y: 420 }] },
     { id: 'jeet-b', x: 760, y: 360, patrol: [{ x: 760, y: 250 }, { x: 760, y: 430 }] },
     { id: 'jeet-c', x: 1030, y: 580, patrol: [{ x: 1120, y: 600 }, { x: 940, y: 560 }] },
   ],
