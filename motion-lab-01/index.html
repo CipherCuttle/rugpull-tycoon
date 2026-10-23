@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#080914">
+<meta name="description" content="UI Forge Motion Lab 01 — original interactive fluid gradient, scroll depth, and live glyph transformation.">
+<title>UI FORGE / Motion Lab 01</title>
+<style>
+:root{color-scheme:dark;--bg:#07080e;--ink:#fcfafa;--ink2:#b7b6c6;--sub:#84869f;--line:rgba(239,236,255,.19);--violet:#ac8bfd;--coral:#fb9d91;--glass:rgba(11,11,20,.5)}
+*,*::before,*::after{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:Manrope,Inter,system-ui,Arial,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}a{color:inherit;text-decoration:none}button,input{font:inherit}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #ffb5cc;outline-offset:4px}::selection{background:#ff84b8;color:#101019}
+.page-noise{pointer-events:none;position:fixed;inset:0;z-index:50;opacity:.09;background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' seed='9' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' opacity='.6' filter='url(%23n)'/%3E%3C/svg%3E");mix-blend-mode:screen}
+.topbar{height:79px;z-index:30;position:absolute;top:0;left:0;width:100%;display:flex;align-items:center;padding:0 5%;gap:36px;border-bottom:1px solid rgba(255,255,255,.17);background:linear-gradient(180deg,rgba(5,7,14,.68),rgba(8,8,18,.05))}.wordmark{display:inline-flex;align-items:center;white-space:nowrap;font-weight:800;letter-spacing:-.065em;font-size:21px;gap:5px}.slash{color:#f3a5c1}.mark{width:22px;height:23px;display:inline-flex;align-items:center;gap:4px;margin-right:9px;transform:skew(-15deg)}.mark i{display:block;width:3px;height:18px;background:#f6e4ff}.tag{margin-left:9px;font:10px 'DM Mono',monospace;letter-spacing:.07em;color:var(--sub)}.topbar nav{display:flex;margin-left:auto;gap:31px;font:10px 'DM Mono',monospace;letter-spacing:.14em}.topbar nav a:hover{color:#f0bcd8}.topcta{font:10px 'DM Mono',monospace;letter-spacing:.09em;border:1px solid rgba(255,255,255,.45);padding:13px 18px;white-space:nowrap}.topcta span{margin-left:15px;color:#efa7c4}
+.hero{height:max(760px,100svh);min-height:740px;position:relative;overflow:hidden;isolation:isolate;background:#090916}.spectral-canvas,.spectral-fallback,.hero-mask{position:absolute;inset:0;width:100%;height:100%}.spectral-canvas{z-index:-3;display:block}.spectral-fallback{z-index:-4;background:radial-gradient(ellipse 48% 65% at 66% 49%,#fb8861 0%,transparent 80%),radial-gradient(ellipse 50% 55% at 85% 72%,#d23f9a 0%,transparent 90%),radial-gradient(ellipse 65% 60% at 28% 20%,#504fd1 2%,transparent 84%),#08091c}.hero-mask{z-index:-1;background:linear-gradient(90deg,rgba(4,5,15,.85) 3%,rgba(5,5,15,.53) 36%,transparent 82%),linear-gradient(0deg,rgba(7,8,17,.67),transparent 25%,transparent 80%,rgba(7,8,17,.46))}.orbital{position:absolute;z-index:-1;pointer-events:none;border:1px solid rgba(255,255,255,.20);border-radius:50%;height:83vw;width:83vw;max-height:900px;max-width:900px;right:-10%;top:7%;transform:rotate(-19deg) scaleX(.74);box-shadow:0 0 70px rgba(229,118,200,.12),inset 0 0 80px rgba(241,177,160,.03)}.orbital-b{width:64vw;height:64vw;max-width:710px;max-height:710px;right:-.5%;top:16%;opacity:.47;transform:rotate(32deg) scaleX(.7)}.hero-content{position:absolute;left:8.1%;top:50%;transform:translateY(-43%);width:min(970px,84%)}.eyebrow{font:10px/1.4 'DM Mono',monospace;letter-spacing:.19em;color:#d3c1e0;display:flex;align-items:center;gap:12px}.indicator{width:6px;height:6px;background:#f8b9c8;border-radius:50%;display:inline-block;box-shadow:0 0 17px rgba(255,185,190,.7)}.sep{opacity:.3}.hero h1{font-weight:800;font-size:clamp(65px,8.15vw,147px);letter-spacing:-.105em;line-height:.92;margin:40px 0 29px;text-wrap:balance}.hero h1 em,.intro h2 em,.depth h2 em,.glyph h2 em,.end h2 em{font-family:Georgia,'Times New Roman',serif;font-weight:400;letter-spacing:-.095em}.hero h1 em{color:#ffc3cd;font-style:italic}.different{color:#fff}.period{color:#ffb0b7}.lede{max-width:580px;font-size:16px;line-height:1.7;color:#dbd6e1;margin:0;text-shadow:0 1px 25px #141323}.hero-actions{display:flex;gap:12px;margin-top:37px;align-items:center;flex-wrap:wrap}.action-primary,.action-ghost{padding:18px 22px;min-height:54px;display:inline-flex;gap:35px;align-items:center;justify-content:space-between;font:11px 'DM Mono',monospace;letter-spacing:.09em}.action-primary{background:#f6f1f0;color:#17121b;box-shadow:0 12px 50px rgba(0,0,0,.12)}.action-primary:hover{background:#ffc3d2}.action-ghost{border:1px solid rgba(255,255,255,.42);background:rgba(14,13,28,.12)}.action-ghost:hover{border-color:#f5c1d2}.hero-rail{position:absolute;right:4.1%;top:34%;height:38%;display:flex;flex-direction:column;align-items:center;gap:24px;font:10px 'DM Mono',monospace;writing-mode:vertical-rl;letter-spacing:.15em;color:#dcd4e9}.rail-line{width:1px;flex:1;background:rgba(255,255,255,.28);position:relative}.rail-line i{height:36%;width:2px;background:#ffc1d1;position:absolute;top:19%;left:-1px}.hero-footer{position:absolute;bottom:0;width:100%;border-top:1px solid rgba(255,255,255,.18);height:60px;padding:0 5%;display:flex;align-items:center;justify-content:space-between;gap:15px;color:#e4d8ed;font:9px 'DM Mono',monospace;letter-spacing:.12em}
+.intro{padding:140px 7.9% 170px;background:#07080f}.intro>.eyebrow{color:var(--violet)}.intro-grid{display:grid;grid-template-columns:1.48fr .52fr;gap:7%;align-items:end}.intro h2{font-size:clamp(51px,6.4vw,120px);line-height:.98;letter-spacing:-.09em;margin:33px 0 55px}.intro h2 em{color:#cbb3ef;font-style:italic}.intro-right{padding-bottom:60px}.intro-right p{font-size:16px;line-height:1.8;color:#c5c4d0;margin-top:0}.intro-right .smallnote{font:10px/1.75 'DM Mono',monospace;letter-spacing:.09em;color:#8d8ea7;margin-top:35px}.material-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:15px}.material-card{border:1px solid var(--line);min-width:0;transition:transform .25s,border-color .25s}.material-card:hover{transform:translateY(-7px);border-color:rgba(255,220,255,.67)}.material-thumb{height:245px;position:relative;overflow:hidden}.thumb-grad{background:radial-gradient(ellipse at 70% 70%,#ffb07a,transparent 38%),radial-gradient(ellipse at 44% 25%,#b475f1,transparent 46%),radial-gradient(ellipse at 70% 8%,#3766f7,transparent 47%),#150f33}.thumb-grad i{position:absolute;inset:-90px;border:2px solid rgba(255,255,255,.19);border-radius:50%;transform:skewY(-20deg) rotate(30deg)}.thumb-grad b{position:absolute;width:160px;height:160px;border-radius:50%;right:15%;top:20%;background:radial-gradient(circle at 45% 40%,#fff9 0%,transparent 30%),linear-gradient(135deg,transparent 40%,rgba(253,242,255,.13));filter:blur(2px)}.thumb-depth{background:linear-gradient(150deg,#4c598e,#eab0a0 41%,#211c46 68%,#0c101f)}.thumb-depth:before,.thumb-depth:after,.thumb-depth i,.thumb-depth b,.thumb-depth em{content:"";position:absolute;bottom:-25%;left:-10%;height:90%;width:120%;background:#0c1123;clip-path:polygon(0% 64%,18% 36%,36% 72%,54% 24%,76% 62%,100% 35%,100% 100%,0 100%)}.thumb-depth:before{transform:translateY(-30%);background:#504c68;filter:blur(2px)}.thumb-depth:after{transform:translateY(22%);background:#0a0c1d}.thumb-depth i{transform:translateY(-13%) scaleX(1.3);background:#292944}.thumb-depth b{transform:translateY(12%) scaleX(.92);background:#14182e}.thumb-depth em{background:radial-gradient(circle,#fbf0db,transparent 66%);width:40%;height:70%;left:30%;bottom:10%;opacity:.35;filter:blur(24px)}.thumb-glyph{background:radial-gradient(circle at 60% 40%,#e18dc2,#41388a 45%,#101427 88%);font:36px/.95 'DM Mono',monospace;letter-spacing:5px;word-break:break-all;white-space:pre;color:rgba(243,205,249,.8);padding:20px;overflow:hidden}.material-meta{min-height:56px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px;color:#e9e5f0;font:9px 'DM Mono',monospace;letter-spacing:.07em}.material-meta span:last-child{color:#9d96b2}
+.depth{background:#090c15}.depth-scroll-area{height:200svh;position:relative}.depth-sticky{height:100svh;min-height:660px;position:sticky;top:0;overflow:hidden;isolation:isolate;background:#1c2138}.depth-sky,.depth-ridge,.depth-cloud,.depth-halo,.depth-atmosphere{position:absolute;pointer-events:none;inset:0}.depth-sky{background:linear-gradient(180deg,#110f2e 3%,#3b3261 29%,#b76e86 55%,#f7b98c 69%,#665b7f 84%,#16172c 100%);z-index:-8}.depth-halo{z-index:-7;border-radius:50%;width:26vw;height:26vw;min-width:240px;min-height:240px;left:54%;top:15%;background:radial-gradient(circle,#fff6dd 0%,#ffe6b3 26%,#ffd3ba 27%,rgba(255,197,156,.48) 45%,transparent 70%);filter:blur(12px);mix-blend-mode:screen}.depth-cloud{z-index:-6;inset:auto;left:-10%;top:36%;width:115%;height:27%;background:radial-gradient(ellipse at 22% 56%,rgba(255,208,197,.24),transparent 43%),radial-gradient(ellipse at 69% 34%,rgba(255,199,182,.39),transparent 39%),radial-gradient(ellipse at 45% 75%,rgba(139,122,173,.46),transparent 55%);filter:blur(42px)}.cloud-two{left:16%;top:26%;opacity:.7;filter:blur(55px)}.depth-ridge{inset:auto;left:-7%;width:114%;height:90%;bottom:-16%;will-change:transform}.ridge-far{z-index:-5;clip-path:polygon(0 65%,8% 56%,14% 61%,25% 38%,31% 49%,43% 27%,51% 48%,59% 38%,69% 57%,77% 34%,86% 50%,93% 42%,100% 63%,100% 100%,0 100%);background:linear-gradient(180deg,rgba(156,118,162,.54),#4c4368 51%,#272a45 91%);filter:blur(2px);opacity:.82}.ridge-mid{z-index:-4;clip-path:polygon(0 65%,9% 44%,18% 59%,27% 42%,39% 69%,48% 30%,58% 61%,65% 42%,76% 67%,86% 29%,100% 61%,100% 100%,0 100%);background:linear-gradient(160deg,#77718a 0%,#222841 50%,#171c35 90%);box-shadow:0 0 200px #ffe3b0}.ridge-near{z-index:-3;clip-path:polygon(0 58%,8% 68%,17% 52%,25% 78%,35% 52%,45% 82%,55% 59%,63% 74%,77% 38%,87% 76%,95% 55%,100% 61%,100% 100%,0 100%);background:linear-gradient(190deg,#272d4d 12%,#0a0d1b 75%);height:81%;bottom:-31%}.depth-atmosphere{z-index:-2;background:linear-gradient(90deg,rgba(6,9,24,.88),rgba(12,12,28,.28) 64%,rgba(8,9,20,.31)),linear-gradient(0deg,#090b18,transparent 50%)}.depth-copy{position:absolute;left:9%;top:29%;max-width:620px}.depth-copy h2{font-size:clamp(70px,9.2vw,150px);line-height:.9;letter-spacing:-.10em;margin:30px 0}.depth-copy h2 em{color:#f6bbc7}.depth-copy p:last-child{font-size:16px;line-height:1.8;color:#f1dce4;max-width:385px}.depth-index,.depth-bottom{position:absolute;font:10px 'DM Mono',monospace;letter-spacing:.2em;color:#f5dce4}.depth-index{right:5%;top:22%}.depth-bottom{bottom:5%;left:9%}
+.glyph{padding:120px 7.9% 130px;background:#080913}.glyph-top{display:flex;align-items:center;justify-content:space-between;gap:12px}.glyph-top .eyebrow{color:#ba9bfb}.glyph-label,.glyph-control-note{font:10px 'DM Mono',monospace;letter-spacing:.1em;color:#9690a9}.glyph-stage{display:grid;grid-template-columns:.98fr 1fr;gap:5%;align-items:center;min-height:620px}.glyph-heading h2{font-size:clamp(68px,7.5vw,125px);letter-spacing:-.1em;line-height:.91;margin:0 0 25px}.glyph-heading h2 em{color:#d9baff}.glyph-heading p{color:#c1bacc;line-height:1.75;max-width:390px}.glyph-canvas-wrap{min-height:560px;height:75vh;max-height:720px;position:relative;overflow:hidden;border:1px solid rgba(214,182,255,.2);background:radial-gradient(ellipse at 62% 42%,#5140a0,#1b1741 59%,#101326 87%)}#glyph-canvas{height:100%;width:100%;display:block;position:absolute;inset:0}.glyph-tag{position:absolute;bottom:19px;left:21px;font:9px 'DM Mono',monospace;letter-spacing:.1em;color:#e2d3ff}.glyph-control-row{display:flex;align-items:center;gap:25px;border-top:1px solid var(--line);padding:24px 0}.glyph-control-row label{font:10px 'DM Mono',monospace;letter-spacing:.09em;white-space:nowrap}.glyph-control-row output{color:#d9baff;margin-left:15px}.glyph-control-row input{flex:1;min-width:0;accent-color:#dfbaff}.glyph-control-note{white-space:nowrap}
+.end{text-align:center;min-height:690px;padding:155px 20px 150px;background:radial-gradient(ellipse at 50% 0%,rgba(98,73,161,.27),transparent 65%),#080913;display:flex;flex-direction:column;align-items:center;justify-content:center}.end h2{font-size:clamp(58px,7vw,108px);letter-spacing:-.095em;line-height:1.02;margin:26px 0}.end h2 em{color:#d0a5ee}.end>p:not(.eyebrow){font-size:15px;color:#bcb8cd;max-width:430px;line-height:1.6}.end .action-primary{margin-top:26px}footer{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:24px 5%;border-top:1px solid var(--line);background:#090a13;font:9px 'DM Mono',monospace;color:#a49dbb;letter-spacing:.08em}.mode{display:flex;align-items:center;gap:8px}.mode>span{margin-right:10px}.mode button{border:1px solid #4b4561;background:none;color:#aca7c2;padding:8px 12px;font:10px 'DM Mono',monospace}.mode button[aria-pressed=true]{background:#c5a5f1;color:#171323;border-color:#c5a5f1}
+@media(max-width:1000px){.topbar{padding:0 4%}.topbar nav{gap:15px}.hero-content{left:7%}.intro{padding:100px 6%}.intro-grid{grid-template-columns:1fr .7fr;gap:3%}.intro h2{font-size:7vw}.material-thumb{height:180px}.glyph{padding:100px 6%}.glyph-heading h2{font-size:8vw}.glyph-canvas-wrap{height:55vh;min-height:440px}}
+@media(max-width:700px){.topbar{height:66px;gap:8px;padding:0 18px}.wordmark{font-size:19px}.mark{margin-right:3px}.tag{font-size:9px;margin-left:6px}.topbar nav{display:none}.topcta{margin-left:auto;padding:11px 10px;font-size:9px}.topcta span{margin-left:7px}.hero{height:100svh;min-height:690px}.hero-mask{background:linear-gradient(90deg,rgba(4,5,15,.57),rgba(4,5,15,.08)),linear-gradient(0deg,rgba(7,8,17,.75),transparent 43%,rgba(7,8,17,.2))}.hero-content{left:22px;right:19px;top:51%;width:auto;transform:translateY(-42%)}.eyebrow{font-size:9px;letter-spacing:.09em;gap:8px}.hero h1{font-size:clamp(51px,11vw,80px);line-height:.98;letter-spacing:-.09em;margin:25px 0}.lede{font-size:13px;max-width:340px;line-height:1.65}.hero-actions{margin-top:25px}.action-primary,.action-ghost{min-height:48px;padding:13px 12px;font-size:9px;gap:9px}.hero-rail{display:none}.hero-footer{height:47px;padding:0 19px;font-size:8px}.hero-footer span:nth-child(2){display:none}.orbital{width:125vw;height:125vw;top:25%;right:-28%}.orbital-b{width:99vw;height:99vw;top:28%;right:-17%}.intro{padding:84px 20px 105px}.intro-grid{display:block}.intro h2{font-size:clamp(41px,10vw,66px);line-height:1;margin:24px 0 21px}.intro-right{padding-bottom:26px}.intro-right p{font-size:13px}.intro-right .smallnote{margin-top:15px;font-size:9px}.material-row{grid-template-columns:1fr;gap:12px}.material-thumb{height:180px}.material-meta{min-height:48px;font-size:9px}.depth-scroll-area{height:190svh}.depth-sticky{min-height:610px}.depth-copy{left:23px;right:21px;top:29%}.depth-copy h2{font-size:clamp(62px,14vw,99px)}.depth-copy p:last-child{font-size:13px;max-width:310px}.depth-index{right:20px;top:16%;font-size:8px}.depth-bottom{left:23px;bottom:12%;font-size:9px}.depth-halo{top:21%;left:55%}.glyph{padding:85px 20px 80px}.glyph-top{align-items:flex-start;flex-direction:column;gap:3px}.glyph-label{font-size:9px}.glyph-stage{display:flex;flex-direction:column;min-height:auto;align-items:stretch;gap:21px}.glyph-heading h2{font-size:clamp(58px,13vw,85px);margin:34px 0 15px}.glyph-heading p{font-size:13px;max-width:320px}.glyph-canvas-wrap{height:375px;min-height:375px}.glyph-control-row{gap:14px;flex-wrap:wrap}.glyph-control-row label{font-size:9px}.glyph-control-note{width:100%;font-size:9px}.end{padding:110px 18px;min-height:580px}.end h2{font-size:clamp(48px,10vw,70px)}.end>p:not(.eyebrow){font-size:13px}footer{padding:21px 18px;flex-wrap:wrap;gap:15px}.mode{order:3;width:100%}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto!important}*,*::before,*::after{animation:none!important;transition:none!important}.material-card:hover{transform:none!important}}
+
+.spectral-canvas[data-renderer="fallback"],.spectral-canvas[data-renderer="static-fallback"]{display:none}
+
+</style>
+</head>
+<body>
+<div class="page-noise" aria-hidden="true"></div>
+<header class="topbar">
+  <a class="wordmark" href="#top" aria-label="UI Forge home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>UI<span class="slash">/</span>FORGE <span class="tag">LAB.01</span></a>
+  <nav aria-label="Main navigation"><a href="#scenes">SCENES</a><a href="#depth">DEPTH</a><a href="#glyph">GLYPH</a></nav>
+  <a class="topcta" href="#scenes">ENTER THE LAB <span aria-hidden="true">↗</span></a>
+</header>
+<main>
+<section class="hero" id="top" aria-labelledby="hero-title">
+  <canvas id="spectral-canvas" class="spectral-canvas" aria-hidden="true"></canvas>
+  <div class="spectral-fallback" aria-hidden="true"></div>
+  <div class="hero-mask" aria-hidden="true"></div>
+  <div class="orbital orbital-a" aria-hidden="true"></div><div class="orbital orbital-b" aria-hidden="true"></div>
+  <div class="hero-content">
+    <p class="eyebrow"><span class="indicator"></span> EXPERIMENTAL DIGITAL MATERIALS <span class="sep">/</span> SERIES 001</p>
+    <h1 id="hero-title">THE WEB<br>SHOULD <em>FEEL</em><br><span class="different">DIFFERENT<span class="period">.</span></span></h1>
+    <p class="lede">Fluid light. Physical depth. Digital alchemy. Original motion systems built to turn ordinary interfaces into experiences.</p>
+    <div class="hero-actions"><a class="action-primary" href="#scenes">EXPLORE THE EFFECTS <span aria-hidden="true">↗</span></a><a class="action-ghost" href="#depth">SCROLL TO DESCEND <span aria-hidden="true">↓</span></a></div>
+  </div>
+  <div class="hero-rail" aria-hidden="true"><span>INTERACTIVE CANVAS</span><div class="rail-line"><i></i></div><span>001 / 003</span></div>
+  <div class="hero-footer"><span>REAL-TIME / ORIGINAL / RESPONSIVE</span><span>MOVE YOUR POINTER TO DISTORT THE LIGHT</span><span>SCROLL ↓</span></div>
+</section>
+<section class="intro" id="scenes" aria-labelledby="scenes-title">
+  <p class="eyebrow">01 / THE MATERIAL LIBRARY</p>
+  <div class="intro-grid"><h2 id="scenes-title">NOT MORE<br><em>COMPONENTS.</em><br>NEW FEELINGS.</h2><div class="intro-right"><p>Three independent visual systems. One shared language. Built in actual browser code—not a screenshot of a website that doesn't exist.</p><p class="smallnote">PICK A MATERIAL. FOLLOW THE SCROLL. WATCH THE IMAGE TURN INTO TYPE.</p></div></div>
+  <div class="material-row">
+    <a href="#top" class="material-card"><div class="material-thumb thumb-grad" aria-hidden="true"><i></i><b></b></div><div class="material-meta"><span>01 / SPECTRAL FIELD</span><span>FLUID GRADIENT ↗</span></div></a>
+    <a href="#depth" class="material-card"><div class="material-thumb thumb-depth" aria-hidden="true"><i></i><b></b><em></em></div><div class="material-meta"><span>02 / DEPTH THEATRE</span><span>SCROLL PARALLAX ↗</span></div></a>
+    <a href="#glyph" class="material-card"><div class="material-thumb thumb-glyph" aria-hidden="true">@#%+*:.<br>%@#*...<br>#%%+*:.<br>*#+%:..</div><div class="material-meta"><span>03 / GLYPH MORPH</span><span>LIVE ASCII ↗</span></div></a>
+  </div>
+</section>
+<section class="depth" id="depth" aria-labelledby="depth-title">
+  <div class="depth-scroll-area">
+    <div class="depth-sticky">
+      <div class="depth-sky" aria-hidden="true"></div>
+      <div class="depth-halo" data-speed="0.12" aria-hidden="true"></div>
+      <div class="depth-cloud cloud-one" data-speed="0.22" aria-hidden="true"></div>
+      <div class="depth-cloud cloud-two" data-speed="0.30" aria-hidden="true"></div>
+      <div class="depth-ridge ridge-far" data-speed="0.35" aria-hidden="true"></div>
+      <div class="depth-ridge ridge-mid" data-speed="0.57" aria-hidden="true"></div>
+      <div class="depth-ridge ridge-near" data-speed="0.90" aria-hidden="true"></div>
+      <div class="depth-atmosphere" aria-hidden="true"></div>
+      <div class="depth-copy"><p class="eyebrow"><span class="indicator"></span> 02 / DEPTH THEATRE</p><h2 id="depth-title">GO<br><em>BEYOND</em><br>THE FLAT.</h2><p>Three independent depth planes move at different speeds. No scroll hijacking. Nothing blocking the content.</p></div>
+      <div class="depth-index" aria-hidden="true">Z-01 &nbsp; / &nbsp; Z-02 &nbsp; / &nbsp; Z-03</div>
+      <div class="depth-bottom" aria-hidden="true">KEEP SCROLLING &nbsp; ↓</div>
+    </div>
+  </div>
+</section>
+<section class="glyph" id="glyph" aria-labelledby="glyph-title">
+  <div class="glyph-top"><p class="eyebrow">03 / GLYPH MORPH</p><p class="glyph-label">LIVE CANVAS / LUMINANCE → CHARACTERS</p></div>
+  <div class="glyph-stage"><div class="glyph-heading"><h2 id="glyph-title">MATTER<br>TO <em>MEANING.</em></h2><p>Pixels become symbols. The same living color field becomes an entirely new material.</p></div>
+    <div class="glyph-canvas-wrap"><canvas id="glyph-canvas" aria-label="Live animated ASCII visualization of a color gradient"></canvas><span class="glyph-tag">GLYPH ENGINE / ORIGINAL</span></div>
+  </div>
+  <div class="glyph-control-row"><label for="glyph-amount">TRANSFORMATION <output id="glyph-value">72%</output></label><input id="glyph-amount" type="range" min="0" max="100" value="72" aria-label="ASCII transformation intensity"><span class="glyph-control-note">DRAG TO REVEAL · STOPS OFFSCREEN</span></div>
+</section>
+<section class="end" aria-labelledby="end-title"><p class="eyebrow">NEXT / COMPOSE YOUR OWN</p><h2 id="end-title">ONE SCENE.<br><em>THREE SYSTEMS.</em><br>INFINITE DIRECTIONS.</h2><p>Start with one impossible-looking effect. Ship it as real code. Then make it yours.</p><a href="#top" class="action-primary">BACK TO THE TOP <span aria-hidden="true">↑</span></a></section>
+</main>
+<footer><span>UI / FORGE — MOTION LAB 01</span><div class="mode" role="group" aria-label="Rendering quality"><span>RENDER</span><button data-quality="full" aria-pressed="true">FULL</button><button data-quality="lite" aria-pressed="false">LITE</button><button data-quality="static" aria-pressed="false">STATIC</button></div><span>ORIGINAL PROTOTYPE · NOT PROD</span></footer>
+<script>
+(() => {
+  'use strict';
+  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const hero = document.querySelector('.hero');
+  const spectral = document.getElementById('spectral-canvas');
+  const glyphCanvas = document.getElementById('glyph-canvas');
+  const glyphWrap = document.querySelector('.glyph-canvas-wrap');
+  const range = document.getElementById('glyph-amount');
+  const output = document.getElementById('glyph-value');
+  const depthArea = document.querySelector('.depth-scroll-area');
+  const depthLayers = [...document.querySelectorAll('[data-speed]')];
+  const qualityButtons = [...document.querySelectorAll('[data-quality]')];
+  const preset = new URLSearchParams(location.search).get('quality');
+  let quality = ['full', 'lite', 'static'].includes(preset) ? preset : 'full';
+  let reducedNow = reduced.matches;
+  let heroVisible = true, glyphVisible = false;
+  let lastTick = 0, rafId = 0;
+  let pointer = { x: .61, y: .41 }, desiredPointer = { x: .61, y: .41 };
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const safeNow = () => performance.now() / 1000;
+  let gl = null, program = null, locationU = null;
+  let shaderOk = false, shaderError = null, sceneStart = safeNow();
+  let screenW = 1, screenH = 1;
+  const vert = `attribute vec2 position; void main(){gl_Position=vec4(position,0.0,1.0);}`;
+  const frag = `
+precision mediump float;
+uniform vec2 u_size;
+uniform vec2 u_mouse;
+uniform float u_time;
+uniform float u_energy;
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
+float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+1.),f.x),f.y);}
+float fbm(vec2 x){float a=.5,v=0.;for(int i=0;i<5;i++){v+=a*noise(x);x=x*2.03+vec2(13.7,4.3);a*=.50;}return v;}
+vec3 palette(float t){
+ vec3 a=vec3(.24,.16,.34), b=vec3(.37,.32,.39), c=vec3(.91,.99,.74), d=vec3(.08,.03,.20);
+ return a+b*cos(6.28318*(c*t+d));
+}
+void main(){
+ vec2 uv=gl_FragCoord.xy/u_size.xy;
+ vec2 p=(2.*gl_FragCoord.xy-u_size.xy)/min(u_size.x,u_size.y);
+ float t=u_time*.055;
+ vec2 m=(u_mouse-.5)*.34;
+ vec2 q=vec2(fbm(p*1.04+vec2(t,0.3)),fbm(p*1.04+vec2(-.23,t)));
+ vec2 r=vec2(fbm(p*1.30+3.2*q+m+vec2(.14,-t*.9)),fbm(p*1.30+3.5*q-m+vec2(1.7,t*.4)));
+ float v=fbm(p*.85+4.3*r+vec2(t*.25,-t*.2));
+ float thread=sin((p.y*.82 + q.x*1.6 + r.y*.9 + p.x*.24)*6.2831)*.5+.5;
+ float core=exp(-3.0*length((p-vec2(.32,-.05))*vec2(.95,1.05)));
+ float glow=exp(-3.5*length((p-vec2(.7,.06))*vec2(.9,1.18)));
+ float phase=v*.92 + thread*.21 + p.x*.07+p.y*.12+t*.03;
+ vec3 col=palette(phase);
+ col=mix(col,vec3(1.0,.55,.52),pow(core,1.35)*.75);
+ col+=vec3(.66,.17,.39)*glow*.57;
+ col+=vec3(.45,.32,.70)*pow(max(0.,thread*v),3.)*.27;
+ float film=hash(gl_FragCoord.xy+fract(u_time)*249.7)-.5;
+ col+=film*.046;
+ col*=mix(.84,1.18,smoothstep(-.55,1.0,uv.y));
+ col*=1.-.24*smoothstep(.23,1.4,length(p-vec2(.15,0.)));
+ col*=u_energy;
+ gl_FragColor=vec4(pow(max(col,vec3(0.0)),vec3(.90)),1.0);
+}`;
+  function shader(type, source) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, source); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      shaderError = gl.getShaderInfoLog(s);
+      gl.deleteShader(s); throw new Error(shaderError || 'shader compile');
+    }
+    return s;
+  }
+  function initGL() {
+    try {
+      gl = spectral.getContext('webgl', { alpha: false, antialias: false, depth: false, stencil: false, premultipliedAlpha: false, preserveDrawingBuffer: true, powerPreference: 'low-power' })
+          || spectral.getContext('experimental-webgl');
+      if (!gl) throw new Error('WebGL context unavailable');
+      program = gl.createProgram();
+      gl.attachShader(program, shader(gl.VERTEX_SHADER, vert));
+      gl.attachShader(program, shader(gl.FRAGMENT_SHADER, frag));
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program));
+      gl.useProgram(program);
+      const buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]), gl.STATIC_DRAW);
+      const a = gl.getAttribLocation(program, 'position');
+      gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
+      locationU = ['u_size','u_mouse','u_time','u_energy'].map(k => gl.getUniformLocation(program,k));
+      gl.clearColor(.04,.04,.1,1);
+      shaderOk = true;
+      spectral.dataset.renderer = 'webgl';
+    } catch (e) {
+      shaderOk = false;
+      shaderError = e.message;
+      spectral.dataset.renderer = 'fallback';
+      console.warn('Spectral fallback used:', e.message);
+    }
+  }
+  function resizeSpectral() {
+    const width = Math.max(1, Math.round(hero.clientWidth));
+    const height = Math.max(1, Math.round(hero.clientHeight));
+    const cap = quality === 'full' ? 1.0 : .55;
+    const dpr = Math.min(window.devicePixelRatio || 1, quality === 'full' ? 1.25 : 1);
+    const maxDim = quality === 'full' ? 1600 : 880;
+    const scale = Math.min(cap * dpr, maxDim / Math.max(width,height));
+    screenW = Math.max(1, Math.round(width * scale));
+    screenH = Math.max(1, Math.round(height * scale));
+    spectral.width = screenW; spectral.height = screenH;
+    if (gl) gl.viewport(0,0,screenW,screenH);
+  }
+  function drawSpectral(sec) {
+    if (!shaderOk || !gl) return;
+    pointer.x += (desiredPointer.x - pointer.x)*.09;
+    pointer.y += (desiredPointer.y - pointer.y)*.09;
+    gl.useProgram(program);
+    gl.uniform2f(locationU[0],screenW,screenH);
+    gl.uniform2f(locationU[1],pointer.x,pointer.y);
+    gl.uniform1f(locationU[2], sec);
+    gl.uniform1f(locationU[3], 1.03);
+    gl.drawArrays(gl.TRIANGLES,0,6);
+  }
+  const gctx = glyphCanvas.getContext('2d', { alpha: false, willReadFrequently: false });
+  const sampler = document.createElement('canvas');
+  const sampleCtx = sampler.getContext('2d',{ willReadFrequently:true });
+  let glyphW = 300,glyphH = 380;
+  function resizeGlyph() {
+    const r = glyphWrap.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio||1,quality==='full'?1.5:1);
+    glyphW = Math.max(1,Math.round(r.width*dpr)); glyphH = Math.max(1,Math.round(r.height*dpr));
+    glyphCanvas.width = glyphW; glyphCanvas.height=glyphH;
+    gctx.setTransform(1,0,0,1,0,0);
+  }
+  function drawGlyph(sec) {
+    if (!gctx) return;
+    const W=glyphW,H=glyphH;
+    const intensity = Number(range.value)/100;
+    gctx.fillStyle='#0d1025';gctx.fillRect(0,0,W,H);
+    const cell = quality==='lite' ? 15 : 12;
+    const cols=Math.max(16,Math.floor(W/(cell*.64)));
+    const rows=Math.max(16,Math.floor(H/cell));
+    sampler.width=cols; sampler.height=rows;
+    if (shaderOk && spectral.width && spectral.height) {
+      // Browser-native downsample of the actual WebGL output; no fake ASCII sprite.
+      sampleCtx.drawImage(spectral,0,0,cols,rows);
+    } else {
+      const grad=sampleCtx.createRadialGradient(cols*.6,rows*.37,1,cols*.5,rows*.5,cols*.62);
+      grad.addColorStop(0,'#f9a6b4');grad.addColorStop(.42,'#7349af');grad.addColorStop(1,'#13162d');
+      sampleCtx.fillStyle=grad; sampleCtx.fillRect(0,0,cols,rows);
+    }
+    const pixels=sampleCtx.getImageData(0,0,cols,rows).data;
+    if (intensity<1) {
+      gctx.globalAlpha = 1-intensity;
+      gctx.drawImage(sampler,0,0,W,H);
+      gctx.globalAlpha = 1;
+    }
+    const chars=' .·:-=+*#%@';
+    const charWidth=W/cols,charHeight=H/rows;
+    gctx.textAlign='left';gctx.textBaseline='middle';
+    gctx.font=`${charHeight*.96}px 'DM Mono', monospace`;
+    const flicker = quality==='static' || reducedNow ? 0 : Math.floor(sec*5);
+    for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
+      const i=(y*cols+x)*4,r=pixels[i],g=pixels[i+1],b=pixels[i+2];
+      const l=(.2126*r+.7152*g+.0722*b)/255;
+      const stagger=((x*13+y*7+flicker)%29)/29;
+      if (stagger > intensity*.94+.05) continue;
+      const glyph=chars[clamp(Math.floor(Math.pow(l,.75)*(chars.length-1)),0,chars.length-1)];
+      if (glyph===' ') continue;
+      const br=clamp(.67+l*.9,.55,1);
+      gctx.fillStyle=`rgba(${Math.round(Math.min(255,r*br+40))},${Math.round(Math.min(255,g*br+30))},${Math.round(Math.min(255,b*br+50))},${.41+intensity*.5})`;
+      gctx.fillText(glyph,(x+.08)*charWidth,(y+.55)*charHeight);
+    }
+  }
+  function updateDepth() {
+    if (!depthArea) return;
+    const r = depthArea.getBoundingClientRect();
+    const max = Math.max(1,r.height-window.innerHeight);
+    const p=clamp((-r.top)/max,0,1);
+    if (quality==='static' || reducedNow) {
+      depthLayers.forEach(e=>e.style.transform='none');
+    } else {
+      depthLayers.forEach(el=>{
+        const speed=Number(el.dataset.speed);
+        const delta=(p-.5)*210*speed;
+        el.style.transform=`translate3d(0,${delta.toFixed(1)}px,0) scale(${(1+(p-.5)*speed*.045).toFixed(3)})`;
+      });
+    }
+    document.documentElement.style.setProperty('--depth-progress',p.toFixed(3));
+  }
+  let scrollQueued=false;
+  function onScroll(){if(scrollQueued)return;scrollQueued=true;requestAnimationFrame(()=>{scrollQueued=false;updateDepth()})}
+  function tick(ms) {
+    rafId=0;
+    const disabled = reducedNow || quality==='static';
+    const fps = quality==='lite' ? 18 : 30;
+    const time= disabled ? 0 : ms/1000-sceneStart;
+    if(ms-lastTick>=1000/fps || disabled) {
+      lastTick=ms;
+      if (heroVisible && !disabled) drawSpectral(time);
+      if (glyphVisible && !disabled) drawGlyph(time);
+      if(disabled) {
+        drawSpectral(0);drawGlyph(0);
+        return;
+      }
+    }
+    if(heroVisible||glyphVisible) rafId=requestAnimationFrame(tick);
+  }
+  function queueFrame(){if(!rafId)rafId=requestAnimationFrame(tick)}
+  function setQuality(mode) {
+    quality=mode;
+    if (mode !== 'static' && !reducedNow && !shaderOk && !shaderError) initGL();
+    qualityButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.quality===mode)));
+    document.documentElement.dataset.quality=mode;
+    resizeSpectral();resizeGlyph();
+    updateDepth();
+    if(mode==='static'||reducedNow){drawSpectral(0);drawGlyph(0)}
+    else {drawSpectral(safeNow()-sceneStart);drawGlyph(safeNow()-sceneStart)}
+    queueFrame();
+  }
+  if (quality !== 'static' && !reducedNow) initGL();
+  else spectral.dataset.renderer = 'static-fallback';
+  const io=new IntersectionObserver(entries=>{
+    for(const e of entries){
+      if(e.target===hero)heroVisible=e.isIntersecting;
+      if(e.target===glyphWrap)glyphVisible=e.isIntersecting;
+    }
+    if(heroVisible||glyphVisible)queueFrame();
+  },{rootMargin:'60px'});
+  io.observe(hero);io.observe(glyphWrap);
+  hero.addEventListener('pointermove',e=>{if(reducedNow||quality==='static')return;const r=hero.getBoundingClientRect();desiredPointer={x:clamp((e.clientX-r.left)/r.width,0,1),y:clamp(1-(e.clientY-r.top)/r.height,0,1)}},{passive:true});
+  hero.addEventListener('pointerleave',()=>desiredPointer={x:.61,y:.41});
+  addEventListener('scroll',onScroll,{passive:true});
+  addEventListener('resize',()=>{resizeSpectral();resizeGlyph();updateDepth();queueFrame()},{passive:true});
+  range.addEventListener('input',()=>{output.value=range.value+'%';drawGlyph(safeNow()-sceneStart)});
+  qualityButtons.forEach(b=>b.addEventListener('click',()=>setQuality(b.dataset.quality)));
+  const reducedChanged=e=>{reducedNow=e.matches;setQuality(quality)};
+  if(reduced.addEventListener)reduced.addEventListener('change',reducedChanged);
+  else reduced.addListener(reducedChanged);
+  spectral.addEventListener('webglcontextlost',e=>{e.preventDefault();shaderOk=false;spectral.dataset.renderer='fallback';queueFrame()});
+  setQuality(quality);
+  window.__MOTION_LAB_DIAGNOSTICS__=()=>({renderer:spectral.dataset.renderer,webgl:shaderOk,shaderError,quality,reducedMotion:reducedNow,spectral:[spectral.width,spectral.height],glyph:[glyphCanvas.width,glyphCanvas.height],depthProgress:getComputedStyle(document.documentElement).getPropertyValue('--depth-progress')});
+})();
+
+</script>
+</body></html>
