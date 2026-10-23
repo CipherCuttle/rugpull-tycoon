@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#141717"><title>UI Forge / Aperture Proof 00</title>
+<style>
+:root{color-scheme:dark;--b:#141717;--p:#242a29;--line:#464e49;--fg:#f0efea;--sub:#a7ada7;--accent:#e9b78d}
+*{box-sizing:border-box}body{margin:0;background:var(--b);color:var(--fg);font-family:system-ui,Arial,sans-serif}
+button{cursor:pointer;font:inherit;color:inherit}button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+main{max-width:1130px;margin:auto;padding:28px 28px 65px}
+header{border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px;padding-bottom:19px}header b{font-size:22px;letter-spacing:-.065em}header b i{color:var(--accent);font-style:normal}header span{font:10px/1.5 monospace;letter-spacing:.08em;text-align:right;color:var(--sub)}
+.intro{display:grid;grid-template-columns:1fr 1fr;align-items:end;gap:40px;padding:62px 0 40px}
+.over{font:11px monospace;letter-spacing:.12em;color:var(--accent)}
+h1{font-size:clamp(58px,8vw,108px);font-weight:800;letter-spacing:-.08em;line-height:.87;margin:18px 0 0}h1 em{font:italic .95em Georgia,serif;color:var(--accent)}
+.intro>p{color:var(--sub);max-width:390px;font-size:15px;line-height:1.7}
+.panel{border:1px solid var(--line)}.label{display:flex;justify-content:space-between;align-items:center;padding:16px 18px;border-bottom:1px solid var(--line);font:11px monospace;letter-spacing:.07em}.label strong{color:var(--accent)}
+.view{height:510px;position:relative;background:radial-gradient(ellipse at center,#303735,#171b1a 73%);overflow:hidden}
+canvas{display:block;width:100%;height:100%;cursor:grab;touch-action:none}canvas:active{cursor:grabbing}
+.corner{position:absolute;pointer-events:none;width:20px;height:20px;border:1px solid var(--sub);opacity:.55}.tl{top:20px;left:20px;border-right:0;border-bottom:0}.tr{top:20px;right:20px;border-left:0;border-bottom:0}.bl{bottom:20px;left:20px;border-right:0;border-top:0}.br{bottom:20px;right:20px;border-left:0;border-top:0}
+.hint{position:absolute;bottom:22px;left:22px;color:var(--sub);font:10px monospace;pointer-events:none}.zoom{position:absolute;bottom:14px;right:14px;display:flex;gap:6px}.zoom button{border:1px solid var(--line);background:#262c2ae8;min-width:42px;height:42px;font-size:20px}
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid var(--line)}.tabs button{background:transparent;border:0;border-right:1px solid var(--line);text-align:left;padding:20px 17px;min-width:0}.tabs button:last-child{border-right:0}.tabs button[aria-pressed=true]{background:var(--p);box-shadow:inset 0 2px var(--accent)}.tabs i{font:11px monospace;font-style:normal;color:var(--accent)}.tabs strong{display:block;margin:8px 0;font-size:17px;letter-spacing:-.04em}.tabs small{color:var(--sub);font-size:11px}
+.details{display:grid;grid-template-columns:1fr 1fr;gap:28px;padding:36px 0;border-bottom:1px solid var(--line)}.details h2{font-size:36px;letter-spacing:-.06em;margin:0 0 14px}.details p{font-size:14px;line-height:1.7;color:var(--sub);max-width:490px;margin:0}.stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}.stats div{border-top:1px solid var(--line);padding-top:12px}.stats span{font:10px monospace;color:var(--sub);display:block}.stats b{font-size:13px;display:block;margin-top:10px}
+.note{color:var(--sub);font:11px/1.8 monospace;margin:24px 0}.note strong{color:var(--accent)}
+footer{margin-top:70px;border-top:1px solid var(--line);padding-top:20px;color:var(--sub);display:flex;justify-content:space-between;gap:15px;font:10px monospace}
+@media(max-width:700px){main{padding:16px 14px 55px}header b{font-size:18px}.intro{grid-template-columns:1fr;gap:18px;padding:44px 0 23px}h1{font-size:clamp(58px,13vw,86px)}.intro>p{font-size:13px}.view{height:390px}.label{font-size:9px}.tabs{grid-template-columns:1fr}.tabs button{border-right:0;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:13px}.tabs strong{min-width:137px;font-size:14px;margin:0}.tabs small{font-size:10px}.details{grid-template-columns:1fr}.details h2{font-size:31px}footer{flex-wrap:wrap;margin-top:40px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style></head><body><main>
+<header><b>UI<i>/</i>FORGE <small style="font-weight:400;color:var(--sub)">STUDIO</small></b><span>APERTURE PROOF 00<br>CLAY STUDIES / 23 OCT 2026</span></header>
+<section class="intro"><div><div class="over">FORM LAB / ART DIRECTION GATE</div><h1>FORM<br>BEFORE <em>finish.</em></h1></div><p>Three mechanical silhouettes. The same neutral clay treatment. Rotate and compare from your phone before we commit to materials, motion or React.</p></section>
+<section class="panel"><div class="label"><span>ROTATABLE GEOMETRY STUDY</span><strong id="num">01 / 03</strong></div><div class="view"><canvas id="c" tabindex="0" aria-label="Interactive approximation of 3D CAD geometry. Drag to rotate and use plus or minus to zoom."></canvas><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i><span class="hint">DRAG TO ROTATE · NO AUTOPLAY</span><div class="zoom"><button id="out" aria-label="Zoom out">−</button><button id="in" aria-label="Zoom in">+</button><button id="reset" aria-label="Reset angle">↺</button></div></div>
+<div class="tabs" role="group" aria-label="Choose model"><button data-m="0" aria-pressed="true"><i>01</i><strong>BIFOLD GATE</strong><small>Split jaw mechanism</small></button><button data-m="1" aria-pressed="false"><i>02</i><strong>TRIAXIAL CROWN</strong><small>Three opposing blades</small></button><button data-m="2" aria-pressed="false"><i>03</i><strong>CANTILEVER</strong><small>Horizontal suspended array</small></button></div>
+</section>
+<section class="details"><div><h2 id="name">Bifold Gate</h2><p id="desc">Asymmetric vertical jaws around a suspended optical throat. Most promising negative space; mechanical realism still needs work.</p></div><div class="stats"><div><span>MATERIAL</span><b>Matched neutral clay</b></div><div><span>SOURCE</span><b>Original CAD polygon outlines</b></div><div><span>STATUS</span><b style="color:var(--accent)">Owner art review</b></div><div><span>DELIVERY</span><b>Isolated preview</b></div></div></section>
+<p class="note"><strong>PREVIEW LIMITATION:</strong> The browser reconstructs the essential geometry from the editable CAD polygon outlines and thicknesses. It approximates the exported GLB models, omitting tiny bevels and some hardware details. The downloadable Proof 00 source package remains authoritative. These are rough form studies, not finished premium art.</p>
+<footer><span>UI FORGE / APERTURE 00</span><span>ISOLATED / NO PRODUCTION CHANGE</span></footer></main>
+<script>
+(function(){
+"use strict";
+const specs=[
+{name:"Bifold Gate",desc:"Asymmetric vertical jaws around a suspended optical throat. Most promising negative space; mechanical realism still needs work.",parts:[
+{p:[[-71,-61],[-40,-69],[-29,-43],[-26,-16],[-34,21],[-23,53],[-57,75],[-77,50],[-71,16],[-81,-28]],h:13,z:-1},
+{p:[[74,-59],[47,-68],[31,-45],[28,-8],[41,28],[27,51],[55,68],[79,45],[70,10],[83,-27]],h:12,z:-1.2},
+{p:[[-32,-51],[-16,-38],[-10,-15],[-12,19],[-21,38],[-28,27],[-24,-10]],h:6,z:7},
+{p:[[33,-50],[18,-35],[11,-10],[12,22],[23,41],[30,30],[25,-7]],h:6,z:6.7},
+{p:[[0,-32],[10,-8],[5,26],[-4,43],[-11,14]],h:9,z:-5},
+{p:[[-73,54],[-50,65],[-39,55],[-48,42],[-69,42]],h:7,z:7},
+{p:[[73,-46],[54,-55],[41,-44],[53,-28],[73,-29]],h:7,z:7}]},
+{name:"Triaxial Crown",desc:"Three offset mechanical blades. Strong radial form, but the outline risks reading like an ordinary propeller.",parts:[]},
+{name:"Cantilever Array",desc:"A suspended horizontal press mechanism with long supporting rails. More structural character, but visually cluttered at small sizes.",parts:[
+{p:[[-101,21],[-76,33],[-48,26],[-24,17],[18,17],[45,30],[81,27],[107,13],[94,0],[63,9],[28,4],[-14,5],[-53,9],[-86,9]],h:10,z:-1},
+{p:[[-99,-22],[-73,-30],[-42,-24],[-21,-11],[16,-10],[43,-25],[84,-26],[106,-13],[93,0],[59,-8],[29,-2],[-14,-2],[-51,-10],[-86,-7]],h:10,z:-1},
+{p:[[-107,-31],[-80,-53],[-66,-44],[-71,-15],[-93,-3],[-109,-10]],h:16,z:-5},
+{p:[[111,13],[86,43],[69,42],[73,15],[94,2],[113,5]],h:16,z:-5},
+{p:[[-22,-44],[-10,-33],[-8,-10],[-12,8],[-8,34],[-19,48],[-32,34],[-24,12],[-26,-10]],h:14,z:5},
+{p:[[19,-44],[10,-32],[9,-12],[13,8],[7,36],[21,48],[32,34],[23,12],[27,-11]],h:14,z:5}]}];
+function rot(p,t){return [p[0]*Math.cos(t)-p[1]*Math.sin(t),p[0]*Math.sin(t)+p[1]*Math.cos(t)]}
+let crown=specs[1];let blade=[[6,22],[17,31],[36,32],[71,58],[81,49],[76,7],[51,-3],[29,7],[11,11]],trim=[[40,30],[67,41],[66,18],[42,16]];
+for(let i=0;i<3;i++){let a=i*Math.PI*2/3;crown.parts.push({p:blade.map(p=>rot(p,a)),h:11,z:[0,-1.7,1.7][i]});crown.parts.push({p:trim.map(p=>rot(p,a)),h:5,z:[0,-1.7,1.7][i]+7})}
+crown.parts.push({p:[[0,19],[11,-9],[-15,-8]],h:10,z:-6.5});
+function circle(x,y,r,n){return Array.from({length:n},(_,i)=>[x+Math.cos(i*6.283185/n)*r,y+Math.sin(i*6.283185/n)*r])}
+for(let y of [-45,45])for(let x of [-58,59])specs[0].parts.push({p:circle(x,y+(x>0?-3:0),4.8,20),h:6,z:7});
+for(let x of [-54,52]){specs[2].parts.push({p:circle(x,16,9,24),h:9,z:5},{p:circle(x,16,4,24),h:3,z:10})}
+const el=document.getElementById("c"),ctx=el.getContext("2d");let selected=0,yaw=-.31,pitch=-.26,zoom=1,down=false,last=[0,0];
+function t(p){let x=p[0],y=p[1],z=p[2];let xx=x*Math.cos(yaw)+z*Math.sin(yaw);let zz=z*Math.cos(yaw)-x*Math.sin(yaw);let yy=y*Math.cos(pitch)-zz*Math.sin(pitch);zz=y*Math.sin(pitch)+zz*Math.cos(pitch);return [xx,yy,zz]}
+function getFaces(){let faces=[];specs[selected].parts.forEach((part,i)=>{let back=part.p.map(v=>t([v[0],v[1],part.z-part.h/2])),front=part.p.map(v=>t([v[0],v[1],part.z+part.h/2]));faces.push([back,"base"],[front,"front"]);for(let k=0;k<part.p.length;k++)faces.push([[back[k],back[(k+1)%back.length],front[(k+1)%back.length],front[k]],"side"])});faces.sort((a,b)=>a[0].reduce((s,p)=>s+p[2],0)/a[0].length-b[0].reduce((s,p)=>s+p[2],0)/b[0].length);return faces}
+function draw(){let r=el.getBoundingClientRect(),w=r.width,h=r.height;if(!w)return;let d=Math.min(devicePixelRatio||1,2);el.width=Math.ceil(w*d);el.height=Math.ceil(h*d);ctx.setTransform(d,0,0,d,0,0);
+let bg=ctx.createRadialGradient(w/2,h/2,30,w/2,h/2,Math.max(w,h)*.6);bg.addColorStop(0,"#303634");bg.addColorStop(1,"#191d1c");ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
+let scale=Math.min(w/(selected===2?275:215),h/195)*zoom;function project(p){let s=1+p[2]/700;return [w/2+p[0]*scale/s,h/2-p[1]*scale/s]}
+for(let face of getFaces()){let q=face[0].map(project);let zz=face[0].reduce((s,v)=>s+v[2],0)/face[0].length;let shade=Math.round((face[1]==="front"?182:face[1]==="side"?130:96)+Math.max(-15,Math.min(22,zz*.25)));ctx.fillStyle="rgb("+shade+","+(shade+2)+","+(shade-1)+")";ctx.strokeStyle="rgba(18,25,21,.4)";ctx.lineWidth=.75;ctx.beginPath();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();ctx.stroke()}
+ctx.fillStyle="#adb1aa";ctx.textAlign="center";ctx.font="10px monospace";ctx.fillText("ORIGINAL FORM STUDY / NEUTRAL CLAY",w/2,h-25)}
+function choose(i){selected=i;yaw=-.31;pitch=-.26;zoom=1;document.querySelectorAll("[data-m]").forEach((e,k)=>e.setAttribute("aria-pressed",k===i?"true":"false"));document.getElementById("num").textContent="0"+(i+1)+" / 03";document.getElementById("name").textContent=specs[i].name;document.getElementById("desc").textContent=specs[i].desc;draw()}
+document.querySelectorAll("[data-m]").forEach(e=>e.onclick=()=>choose(Number(e.dataset.m)));
+document.getElementById("in").onclick=()=>{zoom=Math.min(1.9,zoom*1.15);draw()};document.getElementById("out").onclick=()=>{zoom=Math.max(.5,zoom/1.15);draw()};document.getElementById("reset").onclick=()=>choose(selected);
+el.addEventListener("pointerdown",e=>{down=true;last=[e.clientX,e.clientY];el.setPointerCapture(e.pointerId)});
+el.addEventListener("pointermove",e=>{if(!down)return;let dx=e.clientX-last[0],dy=e.clientY-last[1];yaw+=dx*.009;pitch=Math.max(-1.3,Math.min(1.3,pitch+dy*.009));last=[e.clientX,e.clientY];draw()});
+el.addEventListener("pointerup",()=>{down=false});el.addEventListener("pointercancel",()=>{down=false});
+el.addEventListener("keydown",e=>{if(e.key==="ArrowLeft")yaw-=.12;else if(e.key==="ArrowRight")yaw+=.12;else if(e.key==="ArrowUp")pitch-=.12;else if(e.key==="ArrowDown")pitch+=.12;else return;e.preventDefault();draw()});
+new ResizeObserver(draw).observe(el);choose(0);
+})();
+</script></body></html>
