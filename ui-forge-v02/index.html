@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-theme="paper">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#edeadf">
+<title>UI / FORGE — Industrial Signal V0.2</title>
+<style>
+:root{--paper:#edeadf;--ink:#131817;--accent:#e04c30;--page:var(--paper);--fg:var(--ink);--panel:#e4e1d6;--muted:#676e66;--border:#aab0a5;--opacity:.35;color-scheme:light}
+:root[data-theme=night]{--page:#121614;--fg:#f0eee2;--panel:#202722;--muted:#aab7aa;--border:#475148;color-scheme:dark}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--page);color:var(--fg);font-family:Arial,Helvetica,system-ui,sans-serif;transition:background .18s,color .18s}
+body:before{content:"";position:fixed;inset:0;background-image:radial-gradient(var(--fg) .55px,transparent .6px);background-size:8px 8px;opacity:var(--opacity);pointer-events:none;z-index:20}
+button,a,input{font:inherit}a{color:inherit;text-decoration:none}button{cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+.wrap{max-width:1480px;margin:auto;padding:0 40px}.top{height:76px;border-bottom:1px solid var(--fg);display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{display:flex;align-items:center;gap:12px;font-weight:900;font-size:27px;letter-spacing:-.075em}.slashes{display:inline-flex;gap:3px;transform:skew(-16deg)}.slashes i{display:block;width:6px;height:20px;background:var(--accent)}.brand b{color:var(--accent)}
+nav{display:flex;gap:34px;font:700 11px/1.2 monospace;letter-spacing:.08em}nav a:hover{color:var(--accent)}
+.edition,.overline,.micro{font:11px/1.5 monospace;letter-spacing:.08em;text-transform:uppercase}.edition{color:var(--muted)}.edition b{color:var(--accent)}
+.meta{display:flex;justify-content:space-between;color:var(--muted);padding:13px 0;font:10px monospace;letter-spacing:.06em}
+.hero{min-height:570px;display:grid;grid-template-columns:52% 48%;border-bottom:1px solid var(--fg)}
+.copy{padding:65px 32px 60px 0;display:flex;flex-direction:column;align-items:flex-start}
+.overline{color:var(--accent);margin:0 0 24px}.overline:before{content:"";display:inline-block;background:var(--accent);width:8px;height:8px;margin-right:11px}
+h1{font-size:clamp(76px,8.9vw,139px);line-height:.82;letter-spacing:-.095em;margin:0 0 35px;font-weight:900}
+h1 em{font:italic 400 .92em Georgia,serif;color:var(--accent);letter-spacing:-.085em}
+.subtitle{max-width:445px;line-height:1.7;font-size:15px;opacity:.85;margin:0}
+.actions{display:flex;align-items:center;gap:20px;margin-top:auto;padding-top:30px}
+.cta{background:var(--fg);color:var(--page);display:inline-flex;align-items:center;gap:37px;padding:16px 18px;font:700 12px monospace}
+.cta:hover{background:var(--accent);color:#fff}.cta span{font-size:21px;color:var(--accent)}.cta:hover span{color:white}
+.micro{color:var(--muted);font-size:9px}
+.artspace{border-left:1px solid var(--fg);background:var(--panel);position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.artspace svg{height:100%;width:160%;max-width:none;flex:none;transform:rotate(-5deg);color:var(--fg)}
+.fig{position:absolute;top:28px;left:27px;font:11px monospace;letter-spacing:.08em}.vert{position:absolute;bottom:28px;right:17px;writing-mode:vertical-rl;font:11px monospace;letter-spacing:.08em}
+.cross{position:absolute;width:34px;height:34px;border:2px solid var(--accent);pointer-events:none}.cross.tl{top:60px;left:27px;border-right:0;border-bottom:0}.cross.br{right:26px;bottom:59px;border-left:0;border-top:0}
+.ticker{display:flex;justify-content:space-between;gap:18px;padding:18px 0;border-bottom:1px solid var(--border);font:10px monospace;letter-spacing:.05em;color:var(--muted)}
+.lab{display:grid;grid-template-columns:1fr 1.05fr;gap:60px;padding:78px 0 68px;border-bottom:1px solid var(--fg)}
+.lab h2{font-size:clamp(43px,5.4vw,78px);letter-spacing:-.075em;line-height:1;margin:0}.lab h2 em{color:var(--accent);font:italic 400 1em Georgia,serif}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:28px}.controls label,.controls legend{color:var(--muted);font:11px monospace;letter-spacing:.04em;margin-bottom:16px;padding:0;display:block}
+fieldset{border:0;padding:0;margin:0}.tbuttons{display:flex;gap:8px}.tone{border:1px solid var(--fg);background:transparent;color:var(--fg);padding:14px 12px;min-width:96px;display:flex;justify-content:space-between;gap:7px;font:12px monospace}.tone[aria-pressed=true]{background:var(--fg);color:var(--page)}.tone b{color:var(--accent)}
+.grain input{display:block;width:100%;accent-color:var(--accent)}.grain output{font:12px monospace;color:var(--accent)}
+.controls p{grid-column:1/-1;font-size:12px;line-height:1.7;color:var(--muted);max-width:360px;margin:0}
+section.catalog,section.context{padding-top:76px}.heading{display:flex;align-items:end;justify-content:space-between;gap:15px;margin-bottom:26px}
+.heading h2{font-size:clamp(38px,4.7vw,60px);letter-spacing:-.075em;line-height:1;margin:0}.heading h2 span{color:var(--accent)}.heading .overline{margin-bottom:12px}.fraction{color:var(--muted);font:10px monospace;text-align:right}
+.cards{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:10px}.card{border:1px solid var(--fg);background:var(--panel);min-width:0}
+.image{height:315px;border-bottom:1px solid var(--fg);display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}.image svg{height:94%;width:100%;color:var(--fg)}.image.flow svg{width:140%;max-width:none;flex:none}.idx{position:absolute;top:16px;left:16px;font:10px monospace;z-index:1;letter-spacing:.08em}
+.cardfoot{min-height:126px;padding:20px;display:flex;flex-direction:column;justify-content:space-between}.cardfoot h3{margin:0 0 8px;font-size:19px;letter-spacing:-.04em}.cardfoot p{margin:0;font-size:12px;color:var(--muted);line-height:1.5}.cardfoot span{font:10px monospace;color:var(--muted)}
+.examples{display:grid;grid-template-columns:1fr 1fr;gap:12px}.example{min-height:480px;overflow:hidden;border:1px solid var(--fg);padding:26px;position:relative;background:#e4e0d5;color:#161b18}.example.dark{background:#161b18;color:#ebe9dc}
+.exmeta{font:10px monospace;letter-spacing:.08em;margin-bottom:22px;opacity:.7}.exbar{display:flex;justify-content:space-between;gap:5px;border-bottom:1px solid;padding-bottom:12px;font:10px monospace}.exbar b{font:900 20px Arial;letter-spacing:-.06em}.exbar b span{color:var(--accent)}
+.exbody{position:relative;min-height:310px;display:flex;align-items:center}.extext{z-index:1;position:relative;max-width:56%}.exnum{color:var(--accent);font:30px monospace}
+.exbody h3{font-size:clamp(37px,4vw,60px);line-height:.88;letter-spacing:-.09em;margin:22px 0 16px}.exbody p{font-size:13px;line-height:1.5}.exbtn{display:inline-block;border:1px solid currentColor;padding:12px;font:11px monospace;margin-top:12px}
+.exgraphic{position:absolute;width:67%;height:100%;right:-9%;top:0;opacity:.55}.dark .exgraphic{opacity:.68}
+.exfoot{border-top:1px solid;padding-top:16px;display:flex;align-items:center;gap:12px;justify-content:space-between;font:11px monospace}.exfoot b{color:var(--accent)}
+footer{padding:25px 0 42px;margin-top:80px;border-top:1px solid var(--fg);display:flex;justify-content:space-between;gap:15px;color:var(--muted);font:10px/1.5 monospace}
+@media(max-width:1050px){.wrap{padding:0 25px}.cards{grid-template-columns:1fr 1fr}.card:first-child{grid-column:1/-1}.lab{gap:25px}.hero{grid-template-columns:1fr 1fr}.copy{padding-top:42px}h1{font-size:clamp(66px,8vw,106px)}.exbody h3{font-size:45px}}
+@media(max-width:700px){.wrap{padding:0 18px}.top{height:67px}.brand{font-size:22px}nav{display:none}.edition{font-size:9px}.hero{display:flex;flex-direction:column}.copy{padding:57px 0 33px}.hero h1{font-size:clamp(74px,17vw,115px)}.subtitle{font-size:14px}.actions{gap:12px;margin-top:12px}.cta{font-size:10px;gap:14px;padding:15px 10px}.micro{font-size:8px}.artspace{border-left:0;border-top:1px solid var(--fg);height:310px}.artspace svg{width:140%;height:105%}.ticker{overflow:auto;white-space:nowrap;justify-content:flex-start;gap:23px}.lab{grid-template-columns:1fr;padding:55px 0}.lab h2{font-size:52px}.controls{gap:18px}.tone{min-width:88px;padding:12px 9px}.catalog,.context{padding-top:55px!important}.heading h2{font-size:38px}.fraction{max-width:110px;font-size:9px}.cards,.examples{grid-template-columns:1fr}.card:first-child{grid-column:auto}.image{height:270px}.example{padding:21px;min-height:445px}.exbody h3{font-size:48px}.exgraphic{right:-16%;width:75%}footer{flex-direction:column;margin-top:50px}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+</style>
+</head>
+<body><div class="wrap">
+<header class="top"><a class="brand" href="#top"><span class="slashes"><i></i><i></i><i></i></span> UI<b>/</b>FORGE</a><nav><a href="#system">THE SYSTEM</a><a href="#assets">ASSETS</a><a href="#applications">IN USE</a></nav><span class="edition">PREVIEW <b>002</b></span></header>
+<div class="meta"><span>ORIGINAL / REPRODUCIBLE</span><span>FIELD NOTES — 23 OCT 2026</span></div>
+<main id="top">
+<section class="hero" id="system"><div class="copy"><p class="overline">VISUAL DNA / PRESS 02</p><h1>MAKE<br>IT <em>FEEL</em><br>MADE.</h1><p class="subtitle">Less sci-fi wallpaper. More authored interfaces. A visual language built from repeatable geometry, imperfect ink and useful components.</p><div class="actions"><a class="cta" href="#assets">OPEN THE SPECIMENS <span>↗</span></a><span class="micro">NO MODEL API REQUIRED.<br>EVERY VECTOR HAS SOURCE.</span></div></div>
+<div class="artspace"><svg data-art="ribbon" viewBox="0 0 1200 800" aria-label="Procedurally drawn frequency ribbon"></svg><span class="fig">FIG. 01 — FLOW ENGRAVING</span><span class="vert">PRESS / 4317 / 002</span><i class="cross tl"></i><i class="cross br"></i></div></section>
+<div class="ticker"><span>01 / REPRODUCIBLE</span><span>02 / TACTILE</span><span>03 / PORTABLE</span><span>04 / REFINED</span><span>05 / NOT ANOTHER TEMPLATE</span></div>
+<section class="lab"><div><p class="overline">THE CONTROL ROOM / V0.2</p><h2>One grammar.<br><em>Two atmospheres.</em></h2></div>
+<div class="controls"><fieldset><legend>01 / STOCK</legend><div class="tbuttons"><button type="button" class="tone" data-theme-choice="paper" aria-pressed="true">PAPER <b>↗</b></button><button type="button" class="tone" data-theme-choice="night" aria-pressed="false">NIGHT <b>↗</b></button></div></fieldset><div class="grain"><label for="density">02 / INK DENSITY</label><input type="range" min="0" max="100" value="35" id="density"><output id="density-value">35%</output></div><p>The artwork is one source of truth. The theme changes the materials, not the geometry.</p></div></section>
+<section class="catalog" id="assets"><div class="heading"><div><p class="overline">PRINT LIBRARY / VECTOR</p><h2>ASSET SPECIMENS<span>.</span></h2></div><span class="fraction">03 / 03 FOR REVIEW</span></div><div class="cards">
+<article class="card"><div class="image flow"><span class="idx">NO.01 / TRACE RIBBON</span><svg data-art="ribbon" viewBox="0 0 1200 800" aria-label="Flow engraving"></svg></div><div class="cardfoot"><div><h3>THE TRACE</h3><p>Layered frequency engraving for hero sections.</p></div><span>VECTOR / SEEDED</span></div></article>
+<article class="card"><div class="image"><span class="idx">NO.02 / ROTARY INDEX</span><svg data-art="dial" viewBox="0 0 800 800" aria-label="Asymmetric rotary seal"></svg></div><div class="cardfoot"><div><h3>THE REGISTER</h3><p>Asymmetrical instrument seal, not a stock radar.</p></div><span>VECTOR / SEEDED</span></div></article>
+<article class="card"><div class="image"><span class="idx">NO.03 / INK FIELD</span><svg data-art="grain" viewBox="0 0 1000 800" aria-label="Ink stipple texture"></svg></div><div class="cardfoot"><div><h3>THE GRAIN</h3><p>Deterministic stipple field forming a wave.</p></div><span>VECTOR / SEEDED</span></div></article></div></section>
+<section class="context" id="applications"><div class="heading"><div><p class="overline">SAME GRAMMAR / DIFFERENT JOB</p><h2>MADE TO TRAVEL<span>.</span></h2></div><span class="fraction">02 / CONTEXT STUDIES</span></div><div class="examples">
+<article class="example"><p class="exmeta">APPLICATION 01 / INTELLIGENCE</p><div class="exbar"><b>FIELD<span>WORK</span></b><span>INSTRUMENT 002 / ACTIVE</span></div><div class="exbody"><div class="extext"><span class="exnum">1284</span><h3>Find the<br>signal.</h3><p>Intelligence feels faster when every surface has a job.</p><span class="exbtn">OPEN LIVE FEED ↗</span></div><svg class="exgraphic" data-art="dial" viewBox="0 0 800 800" aria-label="Dial artwork"></svg></div><div class="exfoot"><span>CAPTURE INDEX</span><b>093.74%</b></div></article>
+<article class="example dark"><p class="exmeta">APPLICATION 02 / GAME SYSTEM</p><div class="exbar"><b>WASTELAND <span>RONIN</span></b><span>BUILD / MK.09</span></div><div class="exbody"><div class="extext"><span class="exnum">07</span><h3>Pick your<br>weapon.</h3><p>Same visual rules, totally different narrative.</p><span class="exbtn">SELECT LOADOUT ↗</span></div><svg class="exgraphic" data-art="grain" viewBox="0 0 1000 800" aria-label="Print-grain artwork"></svg></div><div class="exfoot"><span>ENERGY OUTPUT</span><b>74.5%</b></div></article></div></section>
+</main><footer><span>UI / FORGE — VISUAL DNA 0.2 · STATIC PHONE PREVIEW</span><span>SEED 4317 · NO SERVER · NO TRACKING</span></footer></div>
+<script>
+(function(){
+"use strict";
+const ns="http://www.w3.org/2000/svg";
+function add(svg,tag,attrs){let el=document.createElementNS(ns,tag);Object.keys(attrs).forEach(k=>el.setAttribute(k,attrs[k]));svg.appendChild(el);return el;}
+function fmt(n){return Math.round(n*100)/100;}
+function random(seed){let x=seed>>>0;return ()=>((x=(Math.imul(1664525,x)+1013904223)>>>0)/4294967296);}
+function ribbon(svg){
+  for(let j=0;j<57;j++){let d="";let off=j-28.5,y0=104+j*10.5;
+    for(let i=0;i<=115;i++){let t=i/115,x=34+t*1132,r=1/(1+Math.exp(-(t-.48)*17)),curl=72*Math.sin(t*8.1+off*.037)*Math.exp(-Math.pow((t-.53)/.31,2));
+      let bump=Math.sin(t*3.5+.5)*35+curl+Math.sin(t*13+off*.058)*10,y=y0+bump*(.35+r*.8)+off*.78*Math.sin(t*Math.PI);
+      d+=(i===0?"M":"L")+fmt(x)+" "+fmt(y)+" ";
+    }
+    let accent=[4,14,27,40,52].includes(j);add(svg,"path",{d:d,fill:"none",stroke:accent?"#e04c30":"currentColor","stroke-width":accent?2.4:1.1,opacity:accent?.91:.3});
+  }
+  add(svg,"path",{d:"M64 74h58m-29-29v58 M1122 690h-55m27-28v57",stroke:"#e04c30",fill:"none","stroke-width":"2"});
+}
+function dial(svg){
+ for(let j=0;j<7;j++)add(svg,"circle",{cx:400,cy:400,r:112+j*34,fill:"none",stroke:"currentColor",opacity:.18+j*.04,"stroke-width":j===3?2:1});
+ for(let i=0;i<120;i++){let t=-Math.PI/2+i*Math.PI*2/120,lo=i%10===0?317:329,hi=i%10===0?355:341,accent=i%10===0;
+ add(svg,"path",{d:"M"+fmt(400+Math.cos(t)*lo)+" "+fmt(400+Math.sin(t)*lo)+"L"+fmt(400+Math.cos(t)*hi)+" "+fmt(400+Math.sin(t)*hi),stroke:accent?"#e04c30":"currentColor","stroke-width":accent?2.6:1,opacity:accent?1:.48});}
+ let d="";for(let i=0;i<9;i++){let t=-.8+i*.34,r=163+(i%3)*19;d+=(i?"L":"M")+fmt(400+Math.cos(t)*r)+" "+fmt(400+Math.sin(t)*r)+" ";}
+ add(svg,"path",{d:d,stroke:"#e04c30",fill:"none","stroke-width":"7"});
+ add(svg,"circle",{cx:400,cy:400,r:92,stroke:"currentColor",fill:"none","stroke-width":2});
+ add(svg,"circle",{cx:400,cy:400,r:55,fill:"currentColor"});
+ add(svg,"path",{d:"M374 400h52 M400 374v52",stroke:"#e04c30","stroke-width":5});
+ add(svg,"path",{d:"M70 125V70H125 M675 70H730V125 M70 675V730H125 M675 730H730V675",fill:"none",stroke:"#e04c30","stroke-width":3});
+}
+function grain(svg){
+ let rand=random(4317^0xf440);
+ for(let row=0;row<84;row++)for(let col=0;col<105;col++){
+ let x=20+col*9.2,y=22+row*9.1,crest=320+Math.sin(x*.0062)*105+Math.sin(x*.012+1)*40,coherence=Math.max(0,1-Math.abs(y-crest)/290),threshold=.08+.74*coherence+.06*Math.sin((x*.013+y*.007)*2);
+ if(rand()>threshold)continue;let radius=.55+1.18*coherence*(.35+rand()*.65);
+ if((row+col)%13===0)radius+=.45;
+ let accent=rand()<.035;add(svg,"circle",{cx:fmt(x),cy:fmt(y),r:fmt(radius),fill:accent?"#e04c30":"currentColor",opacity:fmt(.25+coherence*.68)});
+ }
+ add(svg,"path",{d:"M36 710 C300 470 540 760 970 460",fill:"none",stroke:"#e04c30","stroke-width":3});
+}
+document.querySelectorAll("svg[data-art]").forEach(svg=>{let kind=svg.getAttribute("data-art");({ribbon,dial,grain})[kind](svg);});
+const buttons=[...document.querySelectorAll("[data-theme-choice]")];buttons.forEach(b=>b.addEventListener("click",()=>{let choice=b.dataset.themeChoice;document.documentElement.dataset.theme=choice;document.querySelector('meta[name="theme-color"]').content=choice==="night"?"#121614":"#edeadf";buttons.forEach(x=>x.setAttribute("aria-pressed",String(x===b)));}));
+let slider=document.getElementById("density"),output=document.getElementById("density-value");
+slider.addEventListener("input",()=>{output.textContent=slider.value+"%";document.documentElement.style.setProperty("--opacity",String(Number(slider.value)/500));});
+})();
+</script></body></html>
