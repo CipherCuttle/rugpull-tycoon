@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0b0e" />
+  <meta name="description" content="UI Forge Shader Lab 01 — an original, live WebGL visual effects laboratory." />
+  <title>UI FORGE — Shader Lab 01</title>
+  <style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600;700;800;900&display=swap');
+:root{color-scheme:dark;--bg:#0a0b0e;--surface:#121418;--ink:#f0ede9;--muted:#9a9da7;--line:#30323b;--hot:#ffa98e;--mono:'DM Mono',monospace;--sans:'DM Sans',system-ui,sans-serif}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+button{color:inherit;font:inherit;cursor:pointer}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid #f8c9a7;outline-offset:4px}a{color:inherit;text-decoration:none}.shell{max-width:1760px;padding:0 4.15vw;margin:0 auto}.accent{color:var(--hot)}
+.masthead{height:82px;display:grid;grid-template-columns:1fr 1fr 1fr;align-items:center;border-bottom:1px solid #2b2d35;gap:12px}.mark{font-weight:900;font-size:23px;letter-spacing:-.075em;white-space:nowrap;display:inline-flex;align-items:center;gap:13px}.mark-icon{color:var(--hot);font-size:28px;transform:translateY(-1px)}.center-mark,.mast-right{font:10px var(--mono);letter-spacing:.09em;color:#9699a3}.center-mark{text-align:center}.mast-right{text-align:right}.mast-right .index{margin-left:23px;color:#666a74}.subtle{color:#585d66}.status-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:#98c9b8;margin-right:9px;box-shadow:0 0 10px #98c9b8aa}
+.intro{padding-top:70px}.eyebrow,.section-index{display:flex;align-items:center;gap:11px;font:11px var(--mono);color:#a4a3aa;letter-spacing:.09em}.little-square{background:var(--hot);height:6px;width:6px;display:inline-block}.rule{height:1px;width:36px;background:#61636a}.intro-inner{display:flex;align-items:end;justify-content:space-between;gap:32px;padding:30px 0 42px}.intro h1{margin:0;font-size:clamp(72px,8.5vw,148px);letter-spacing:-.094em;line-height:.78;font-weight:900}.intro h1 em{font-weight:500;font-family:Georgia,serif;letter-spacing:-.088em;background:linear-gradient(100deg,#ffc4b1 10%,#b9aaff 55%,#a9eff5 99%);color:transparent;background-clip:text;-webkit-background-clip:text}.intro p{margin:0 0 7px;color:#aba8b4;max-width:360px;font-size:14px;line-height:1.7}
+.studio{border:1px solid var(--line);position:relative}.viewport-head{height:51px;display:flex;justify-content:space-between;align-items:center;gap:10px;background:#12141a;border-bottom:1px solid var(--line);padding:0 21px;font:10px var(--mono);letter-spacing:.065em}.live{display:inline-flex;align-items:center;gap:10px}.live #active-preset-label{color:#f7f4f0}.pulse{width:7px;height:7px;background:#a8d5b8;border-radius:50%;box-shadow:0 0 12px #a8d5b844}.render-info{display:flex;gap:19px;color:#8c8c97}.render-info #runtime-status{color:#bed8cb}.muted{color:#747682}.stage{height:clamp(460px,52vw,720px);position:relative;background:#0f1016;overflow:hidden}.canvas-holder{position:absolute;inset:0}.canvas-holder canvas{width:100%;height:100%;display:block;touch-action:pan-y;position:relative;z-index:2}.canvas-holder .css-fallback{position:absolute;inset:0;background:radial-gradient(ellipse 50% 60% at 65% 35%,#fd7d89,transparent 70%),radial-gradient(ellipse 60% 65% at 30% 65%,#433c9f,transparent 80%),linear-gradient(135deg,#070b1c,#201a39 66%,#0b111d);z-index:1}.shader-vignette{position:absolute;inset:0;z-index:3;pointer-events:none;background:linear-gradient(180deg,#0709105a,transparent 18%,transparent 76%,#0709108c),linear-gradient(90deg,#090a158c,transparent 30%,transparent 75%,#090a1533)}
+.edge-glints{position:absolute;z-index:4;pointer-events:none;inset:21px}.edge-glints i{position:absolute;width:15px;height:15px;border-color:#f7f0e7aa;border-style:solid}.edge-glints i:nth-child(1){top:0;left:0;border-width:1px 0 0 1px}.edge-glints i:nth-child(2){top:0;right:0;border-width:1px 1px 0 0}.edge-glints i:nth-child(3){bottom:0;left:0;border-width:0 0 1px 1px}.edge-glints i:nth-child(4){bottom:0;right:0;border-width:0 1px 1px 0}.stage-caption{position:absolute;bottom:51px;left:22px;right:22px;z-index:4;display:flex;justify-content:space-between;gap:15px;color:#e8dfebbe;font:9px var(--mono);letter-spacing:.14em}.stage-ui{position:absolute;inset:0;z-index:5;pointer-events:none}.frame-label{position:absolute;left:32px;top:29px;color:#f7eff1be;font:10px var(--mono);letter-spacing:.10em}.bottom-label{top:auto;bottom:25px;left:23px;color:#c5c1d1}.bar{display:inline-block;height:1px;background:#f6d1bf;width:35px;vertical-align:middle;margin:0 8px}.stage-actions{position:absolute;top:25px;right:30px;display:flex;gap:6px;pointer-events:auto}.stage-actions button{border:1px solid #ededed56;color:#fff;background:#090b12a3;backdrop-filter:blur(12px);padding:9px 12px;display:inline-flex;gap:9px;align-items:center;font:9px var(--mono);letter-spacing:.06em}.stage-actions button span:first-child{font-size:17px;line-height:.8}.stage-actions button:hover{background:#ffffff19;border-color:#fff}.transport{min-height:54px;background:#12141a;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0 19px}.viewport-idx,.help{color:#92939e;font:10px var(--mono);letter-spacing:.05em}.help .star{color:var(--hot);font-size:13px;margin-left:9px}.quality{display:flex;align-items:center;gap:3px}.quality button{border:1px solid transparent;background:transparent;padding:8px 14px;color:#8c8f9a;font:10px var(--mono)}.quality button[aria-pressed=true]{background:#2b2d35;border-color:#474951;color:#fff}
+.workspace{display:grid;grid-template-columns:1.22fr .8fr;gap:5.1vw;padding:98px 0 104px}.section-head{margin-bottom:26px}.section-head h2{font-size:clamp(32px,3.6vw,58px);line-height:1.05;letter-spacing:-.07em;margin:20px 0 0}.section-head h2 em{font:italic 400 .95em Georgia,serif;color:#bdb9c8}.presets{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.preset{border:1px solid #30323a;background:#111319;text-align:left;padding:0;min-width:0;position:relative;transition:border-color .15s,background .15s}.preset[aria-pressed=true]{border-color:#dcc1b7}.preset:hover{border-color:#a4a1a5;background:#17191f}.thumb{height:160px;display:block;position:relative;overflow:hidden;background:#1e1825}.thumb-silk{background:radial-gradient(ellipse at 72% 50%,#e18ea7,#41366a 65%,#161629)}.thumb-chrome{background:radial-gradient(ellipse at 50% 60%,#e4e7e4,#777785 30%,#171a24 70%)}.thumb-solar{background:radial-gradient(ellipse at 70% 45%,#ffe6ae,#df6c58 32%,#311b36 72%,#11101b)}.thumb-thread{background:linear-gradient(125deg,#051828,#11839c 38%,#a046aa 70%,#0c1424)}.thumb canvas{width:100%;height:100%;display:block}.thumb-id{position:absolute;top:12px;left:13px;color:#fff;font:10px var(--mono);text-shadow:0 1px 5px #0009}.preset-body{display:block;padding:16px 40px 18px 16px}.preset-body strong{font:12px var(--mono);letter-spacing:.08em;display:block}.preset-body small{color:#8e919d;display:block;margin-top:10px;font-size:11px}.preset .arrow{position:absolute;right:16px;bottom:21px;font-size:18px;color:#f5bdac}.panel{border:1px solid #363741;background:#111319}.panel-top{height:50px;padding:0 20px;border-bottom:1px solid #30323c;display:flex;align-items:center;justify-content:space-between;color:#c3c1c8;font:10px var(--mono);letter-spacing:.06em}.panel-led{color:#9ed1ba;font-size:10px}.panel-led i{display:inline-block;width:6px;height:6px;background:#9ed1ba;border-radius:50%;margin-right:7px}.sliders{padding:21px 24px 12px;display:grid;grid-template-columns:1fr auto;column-gap:10px;row-gap:10px}.sliders label{grid-column:1/-1;display:flex;justify-content:space-between;margin-top:12px;color:#c0bfc8;font:10px var(--mono);letter-spacing:.08em}.sliders output{color:#f4c8bd}.sliders input{grid-column:1/-1;width:100%;height:16px;accent-color:#f4bda9;cursor:pointer;margin:0;touch-action:pan-y}.colors{display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:1px solid #32323d;padding:18px 24px;font:10px var(--mono);color:#c0bfc8}.swatches{display:flex;gap:10px}.swatch{width:26px;height:26px;border-radius:50%;border:2px solid #111319;outline:1px solid #474953}.swatch[aria-pressed=true]{outline:2px solid #e9e0d9}.swatch-0{background:conic-gradient(#f5b6a1,#a49cf1,#77d7ff,#f5b6a1)}.swatch-1{background:conic-gradient(#bbfcf0,#569eb7,#6d6eb4,#bbfcf0)}.swatch-2{background:conic-gradient(#ffe9c1,#ed8652,#9f355e,#ffe9c1)}.panel-bottom{padding:14px 18px;border-top:1px solid #32323d;display:flex;justify-content:space-between;gap:10px}.panel-bottom button{background:transparent;border:0;padding:11px 5px;font:10px var(--mono);letter-spacing:.04em;color:#c7c3cb}.panel-bottom button:hover{color:#fff}.copy-button{margin-top:13px;width:100%;height:56px;border:1px solid #d2c7c7;background:#e9e1de;color:#101117;text-align:left;padding:0 18px;display:flex;align-items:center;gap:15px;font:11px var(--mono);letter-spacing:.04em}.copy-button:hover{background:#fff}.copy-button span{font-size:20px}.copy-button small{font:10px var(--mono);margin-left:auto;color:#4b4d56}.microcopy{font:11px/1.6 var(--mono);color:#777c88;max-width:470px;margin-top:19px}.manifest{border-top:1px solid #33343e;border-bottom:1px solid #33343e;display:flex;justify-content:space-between;gap:20px;padding:29px 0;color:#95959d;font:10px var(--mono);letter-spacing:.06em}footer{display:flex;align-items:center;justify-content:space-between;gap:20px;min-height:125px;color:#8b8e9a;font:10px var(--mono);letter-spacing:.05em}footer .mark{font-size:18px;color:#e5e2df}.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(100px);z-index:100;background:#e8e5de;color:#15171d;padding:15px 24px;max-width:calc(100vw - 36px);font:12px var(--mono);pointer-events:none;opacity:0;transition:transform .25s,opacity .25s}.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:1100px){.shell{padding:0 30px}.center-mark{display:none}.masthead{grid-template-columns:1fr 1fr}.workspace{gap:30px}.intro h1{font-size:clamp(65px,10vw,115px)}.thumb{height:135px}.help{display:none}.intro p{max-width:300px}}
+@media(max-width:700px){.shell{padding:0 15px}.masthead{height:65px}.mark{font-size:20px}.mark-icon{font-size:24px}.mast-right{font-size:8px}.mast-right .index{display:none}.intro{padding-top:47px}.eyebrow{font-size:9px}.intro-inner{display:block;padding:23px 0 28px}.intro h1{font-size:clamp(55px,13.7vw,90px)}.intro p{font-size:12px;line-height:1.7;margin:20px 0 0}.viewport-head{height:43px;padding:0 10px;font-size:9px}.render-info{font-size:8px;gap:9px}.render-info #resolution{display:none}.stage{height:min(112vw,505px);min-height:340px}.edge-glints{inset:12px}.frame-label{top:19px;left:17px;font-size:8px}.bottom-label{bottom:20px}.stage-actions{top:14px;right:14px}.stage-actions button{padding:7px 8px}.stage-actions .btn-copy{display:none}.stage-actions button span:first-child{font-size:18px}.stage-caption{left:12px;right:12px;bottom:40px;font-size:7px}.stage-caption span:last-child{display:none}.transport{flex-wrap:wrap;padding:9px;gap:3px;min-height:48px}.viewport-idx{font-size:8px}.quality button{padding:8px 10px;font-size:9px}.workspace{display:block;padding:65px 0 70px}.workspace-right{margin-top:65px}.section-head h2{font-size:35px}.section-index{font-size:9px}.presets{gap:8px}.thumb{height:111px}.preset-body{padding:13px 8px 27px}.preset-body strong{font-size:10px;line-height:1.35}.preset-body small{font-size:9px;line-height:1.3}.preset .arrow{bottom:8px;right:9px;font-size:16px}.panel-top{padding:0 13px}.sliders{padding:14px 16px 12px}.sliders label{font-size:9px}.colors{padding:17px 15px;font-size:9px}.manifest{flex-direction:column;gap:14px;font-size:9px;padding:25px 0}footer{min-height:110px;flex-wrap:wrap;font-size:9px}footer>span:last-child{display:none}}
+@media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+body[data-preset='1'] .css-fallback{background:radial-gradient(ellipse 50% 45% at 57% 49%,#aab5b9,#364958 52%,transparent 83%),linear-gradient(135deg,#0c121b,#132630,#05090e)}
+body[data-preset='2'] .css-fallback{background:radial-gradient(ellipse 38% 58% at 52% 46%,#ffd5a1,#f08d66 31%,#521d35 66%,transparent 92%),linear-gradient(135deg,#100b13,#2b122b,#070915)}
+body[data-preset='3'] .css-fallback{background:repeating-linear-gradient(115deg,transparent,transparent 30px,#6ecfe41e 31px,transparent 32px),radial-gradient(ellipse at 57% 48%,#a548a9,#185a7a 55%,#061322 85%)}
+
+</style>
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <a class="mark" href="#top" aria-label="UI Forge, top"><span class="mark-icon" aria-hidden="true">✳</span><span>UI<span class="accent">/</span>FORGE</span></a>
+      <div class="center-mark">EXPERIMENTAL INTERFACES <span class="subtle">/</span> FIELDWORK NO. 001</div>
+      <div class="mast-right"><span class="status-dot"></span> REAL-TIME WEBGL <span class="index">2026 / 01</span></div>
+    </header>
+    <main id="top">
+      <section class="intro">
+        <div class="eyebrow"><span class="little-square"></span> CREATIVE CODING EXPERIMENT <span class="rule"></span> 01—04</div>
+        <div class="intro-inner">
+          <h1>MAKE LIGHT<br><em>BEHAVE.</em></h1>
+          <p>One shader engine. Four distinct materials.<br/>Nothing baked into an image. Change the rules, touch the surface, find something worth shipping.</p>
+        </div>
+      </section>
+      <section class="studio" aria-label="Live interactive shader studio">
+        <div class="viewport-head">
+          <span class="live"><span class="pulse"></span> LIVE RENDER <span class="muted">/</span> <span id="active-preset-label">PRISMATIC SILK</span></span>
+          <div class="render-info"><span id="fps">— FPS</span><span id="resolution">— × —</span><span id="runtime-status">INITIALIZING</span></div>
+        </div>
+        <div class="stage" id="stage">
+          <div class="canvas-holder" id="canvas-holder">
+            <canvas id="shader" aria-label="Interactive, generative prismatic shader artwork. Move your pointer across the surface to distort the material." tabindex="0"></canvas>
+            <div class="css-fallback" aria-hidden="true"></div>
+            <div class="shader-vignette" aria-hidden="true"></div>
+            <div class="edge-glints" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+            <div class="stage-caption"><span>VISUAL STUDY / 001</span><span id="viewport-description">CHROMATIC FABRIC / VOLUMETRIC LIGHT</span></div>
+          </div>
+          <div class="stage-ui">
+            <span class="frame-label top-label">✳ ORIGINAL SHADER / NOT STOCK FOOTAGE</span>
+            <span class="frame-label bottom-label">MOVE / DRAG <span class="bar"></span> TO DISTORT THE SURFACE</span>
+            <div class="stage-actions">
+              <button type="button" id="pause" aria-label="Pause animation"><span aria-hidden="true">Ⅱ</span><span class="btn-copy">PAUSE</span></button>
+              <button type="button" id="snapshot" aria-label="Save shader image"><span aria-hidden="true">↧</span><span class="btn-copy">EXPORT FRAME</span></button>
+            </div>
+          </div>
+        </div>
+        <div class="transport">
+          <span class="viewport-idx">01 / SPECTRAL STUDIES</span>
+          <div class="quality" role="group" aria-label="Rendering quality">
+            <button type="button" data-quality="full" aria-pressed="true">FULL</button>
+            <button type="button" data-quality="lite" aria-pressed="false">LITE</button>
+            <button type="button" data-quality="static" aria-pressed="false">STILL</button>
+          </div>
+          <div class="help">DESIGNED FOR TOUCH + POINTER <span class="star">✦</span></div>
+        </div>
+      </section>
+      <section class="workspace">
+        <div class="workspace-left">
+          <div class="section-head"><span class="section-index">01 / MATERIAL LIBRARY</span><h2>Four experiments.<br/><em>Four different behaviors.</em></h2></div>
+          <div class="presets" role="group" aria-label="Select shader material">
+            <button type="button" class="preset" data-preset="0" aria-pressed="true">
+              <span class="thumb thumb-silk"><canvas width="240" height="142" aria-hidden="true"></canvas><span class="thumb-id">01</span></span>
+              <span class="preset-body"><strong>PRISMATIC SILK</strong><small>Chromatic folds / illuminated fabric</small></span><span class="arrow">↗</span>
+            </button>
+            <button type="button" class="preset" data-preset="1" aria-pressed="false">
+              <span class="thumb thumb-chrome"><canvas width="240" height="142" aria-hidden="true"></canvas><span class="thumb-id">02</span></span>
+              <span class="preset-body"><strong>LIQUID CHROME</strong><small>Reflected light / machined fluid</small></span><span class="arrow">↗</span>
+            </button>
+            <button type="button" class="preset" data-preset="2" aria-pressed="false">
+              <span class="thumb thumb-solar"><canvas width="240" height="142" aria-hidden="true"></canvas><span class="thumb-id">03</span></span>
+              <span class="preset-body"><strong>SOLAR VEIL</strong><small>Radiant dust / thermal scattering</small></span><span class="arrow">↗</span>
+            </button>
+            <button type="button" class="preset" data-preset="3" aria-pressed="false">
+              <span class="thumb thumb-thread"><canvas width="240" height="142" aria-hidden="true"></canvas><span class="thumb-id">04</span></span>
+              <span class="preset-body"><strong>CHROMATIC THREADS</strong><small>Interference / woven luminosity</small></span><span class="arrow">↗</span>
+            </button>
+          </div>
+        </div>
+        <div class="workspace-right">
+          <div class="section-head"><span class="section-index">02 / THE INSTRUMENT</span><h2>Dial it in.<br/><em>Everything is live.</em></h2></div>
+          <div class="panel">
+            <div class="panel-top"><span>PARAMETER CONSOLE</span><span class="panel-led"><i></i> SYNCED</span></div>
+            <div class="sliders">
+              <label for="motion"><span>MOTION</span><output id="motion-out">42</output></label><input id="motion" type="range" min="0" max="100" step="1" value="42" />
+              <label for="warp"><span>DISTORTION</span><output id="warp-out">56</output></label><input id="warp" type="range" min="0" max="100" step="1" value="56" />
+              <label for="bloom"><span>LUMINANCE</span><output id="bloom-out">66</output></label><input id="bloom" type="range" min="0" max="100" step="1" value="66" />
+              <label for="grain"><span>FILM GRAIN</span><output id="grain-out">18</output></label><input id="grain" type="range" min="0" max="100" step="1" value="18" />
+              <label for="scale"><span>DETAIL SCALE</span><output id="scale-out">55</output></label><input id="scale" type="range" min="0" max="100" step="1" value="55" />
+            </div>
+            <div class="colors"><span>COLOR ATMOSPHERE</span><div class="swatches" role="group" aria-label="Choose color atmosphere"><button type="button" class="swatch swatch-0" data-color="0" aria-pressed="true" aria-label="Original colors"></button><button type="button" class="swatch swatch-1" data-color="1" aria-pressed="false" aria-label="Cold colorway"></button><button type="button" class="swatch swatch-2" data-color="2" aria-pressed="false" aria-label="Warm colorway"></button></div></div>
+            <div class="panel-bottom"><button type="button" id="randomize">↝ GENERATE VARIATION</button><button type="button" id="reset-controls">↺ RESET</button></div>
+          </div>
+          <button type="button" id="copy-config" class="copy-button"><span>↗</span> COPY REPRODUCIBLE CONFIG <small>JSON</small></button>
+          <p class="microcopy">No generative API. No image prompt. Your settings drive an original fragment shader. Visual acceptance is still a human decision.</p>
+        </div>
+      </section>
+      <section class="manifest" aria-label="Production requirements">
+        <span>NOT A SCREENSHOT GENERATOR.</span><span>ART DIRECTION → CODE → CRITIQUE → REPEAT.</span><span>BUILD 01 / OWNER VISUAL REVIEW REQUIRED</span>
+      </section>
+    </main>
+    <footer><span class="mark">UI<span class="accent">/</span>FORGE</span><span>ORIGINAL INTERACTIVE WEB MATERIALS</span><span>THE RENDER IS THE EXPERIMENT.</span></footer>
+  </div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script>
+/* UI FORGE — Shader Lab 01 / original WebGL1 fragment renderer.
+   No React integration yet. This is an isolated visual approval experiment. */
+(() => {
+  'use strict';
+  const canvas = document.querySelector('#shader');
+  const stage = document.querySelector('#canvas-holder');
+  const fpsLabel = document.querySelector('#fps');
+  const resLabel = document.querySelector('#resolution');
+  const runtimeLabel = document.querySelector('#runtime-status');
+  const activeLabel = document.querySelector('#active-preset-label');
+  const descriptionLabel = document.querySelector('#viewport-description');
+  const qualityButtons = [...document.querySelectorAll('[data-quality]')];
+  const presetButtons = [...document.querySelectorAll('[data-preset]')];
+  const colorButtons = [...document.querySelectorAll('[data-color]')];
+  const reducedQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const touchDevice = matchMedia('(pointer: coarse)').matches;
+  const opts = ['motion','warp','bloom','grain','scale'];
+  const defaults = {motion:42,warp:56,bloom:66,grain:18,scale:55};
+  const labels = ['PRISMATIC SILK','LIQUID CHROME','SOLAR VEIL','CHROMATIC THREADS'];
+  const descriptions = ['CHROMATIC FABRIC / VOLUMETRIC LIGHT', 'SPECULAR REFLECTION / LIQUID METAL', 'SCATTERED LIGHT / RADIANT DUST', 'INTERFERENCE / OPTICAL THREADS'];
+  const settings = {...defaults};
+  let mode=0, colorway=0, quality='full', running=!reducedQuery.matches, mouse={x:.5,y:.5}, mouseTarget={x:.5,y:.5};
+  let time=4.25, last=0, lastFrame=0, frameCount=0, fpsTime=0, raf=0, visible=true, gl=null, program=null, loc={}, textureReady=false;
+  let webglError=null, toastTimer=0, generation=0;
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const vertex=`attribute vec2 a_position;
+void main(){gl_Position=vec4(a_position,0.,1.);}`;
+  const fragment=`precision highp float;
+uniform vec2 u_resolution;
+uniform vec2 u_pointer;
+uniform float u_time;
+uniform float u_mode;
+uniform float u_colorway;
+uniform float u_warp;
+uniform float u_bloom;
+uniform float u_grain;
+uniform float u_scale;
+const float PI=3.14159265359;
+float hash21(vec2 p){p=fract(p*vec2(123.34,345.45));p+=dot(p,p+34.345);return fract(p.x*p.y);}
+float noise(vec2 x){vec2 i=floor(x),f=fract(x);f=f*f*(3.-2.*f);return mix(mix(hash21(i),hash21(i+vec2(1,0)),f.x),mix(hash21(i+vec2(0,1)),hash21(i+vec2(1,1)),f.x),f.y);}
+float fbm(vec2 x){float s=0.,a=.52;for(int i=0;i<4;i++){s+=a*noise(x);x=x*2.071+vec2(17.7,4.9);a*=.49;}return s;}
+vec3 tonemap(vec3 v){return 1.-exp(-v*1.12);}
+vec3 colorShift(vec3 c, float w){
+  if(w<.5)return c;
+  float l=dot(c,vec3(.30,.59,.11));
+  if(w<1.5)return mix(c,vec3(l*.24,l*.94,l*1.24)+vec3(.04,.12,.25),.66);
+  return mix(c,vec3(l*1.32,l*.63,l*.43)+vec3(.19,.06,.02),.57);
+}
+vec3 silk(vec2 p,float t,float warp,float bloom){
+ vec2 q=p*vec2(1.13,1.0);
+ float n=fbm(q*1.4+vec2(.31*t,.05*t));
+ float n2=fbm(q*2.3+vec2(n*1.3,-.18*t));
+ q.y+=sin(q.x*2.9+sin(q.x*2.1+t*.7)*.8+t*.32)*.29;
+ q+=warp*vec2(n-.5,n2-.5)*.28;
+ float fold=q.y*5.4+q.x*1.3+sin(q.x*3.4+t*.3)*1.5+(n2-.5)*warp*2.8;
+ float silkWave=sin(fold);
+ float crease=pow(1.-abs(silkWave),19.);
+ float lateral=sin(fold*.4+q.x*2.1);
+ float glow=exp(-1.8*pow(q.y-.24*sin(q.x*1.5+t*.38),2.));
+ vec3 base=mix(vec3(.035,.019,.115),vec3(.13,.06,.28),smoothstep(-.8,1.,lateral));
+ vec3 cold=vec3(.13,.56,1.20)*pow(max(0.,sin(fold*.38+.9)),2.);
+ vec3 rose=vec3(1.16,.17,.42)*pow(max(0.,sin(fold*.42+3.)),2.);
+ vec3 apricot=vec3(1.16,.55,.25)*pow(max(0.,sin(fold*.27+5.)),3.);
+ vec3 c=base+(.34*cold+.43*rose+.33*apricot)*(.28+glow*.95);
+ c+=crease*(vec3(.8,.78,1.35)+cold*.8)*(.35+bloom*1.35)*glow;
+ c+=pow(max(0.,cos(fold*.18+q.x*.9)),6.)*vec3(.22,.08,.44);
+ c*=.68+glow*.5;
+ return c;
+}
+vec3 chrome(vec2 p,float t,float warp,float bloom){
+ vec2 q=p*1.15;float r=length(q-vec2(-.04,.04)),a=atan(q.y+.01,q.x+.04);
+ float n=fbm(q*1.5+vec2(t*.1,-t*.12));
+ float v=r*16.+a*4.0+sin(a*5.-t*.35)*2.0+(n-.5)*warp*6.5-t*.55;
+ float waves=sin(v);
+ float metallic=smoothstep(-.88,.93,waves);
+ float razor=pow(1.-abs(waves),20.);
+ float corona=exp(-r*1.35);
+ float caustic=pow(max(0.,sin(v*.42+a*2.)),9.);
+ vec3 dark=vec3(.014,.026,.045);
+ vec3 steel=mix(vec3(.045,.095,.14),vec3(.84,.86,.93),pow(metallic,2.5));
+ steel*=.32+.82*pow(max(.0,cos(a+.8)),2.);
+ vec3 c=mix(dark,steel,.45+corona*.47);
+ c+=vec3(.35,.67,1.0)*razor*(.25+bloom*1.35)*corona;
+ c+=vec3(.95,.45,.32)*caustic*.8*pow(max(.0,sin(a*3.+t*.2)),2.);
+ c+=pow(max(0.,sin(v*.25+.45)),12.)*vec3(.18,.32,.35);
+ c*=1.-.25*smoothstep(1.1,1.7,r);
+ return c;
+}
+vec3 solar(vec2 p,float t,float warp,float bloom){
+ vec2 q=(p-vec2(.15,-.015))*vec2(.9,1.05);
+ float r=length(q),a=atan(q.y,q.x);
+ float n=fbm(q*1.55+vec2(-t*.06,t*.14));
+ float n2=fbm(q*3.5+vec2(n*2.,-t*.2));
+ float bend=(n-.5)*warp*.63;
+ float ring=abs(r-.37-.11*sin(a*4.2+t*.2)-bend);
+ float core=exp(-r*r*8.0);
+ float fire=exp(-ring*7.)*(.35+.65*n2);
+ float rays=pow(max(.0,sin(a*22.+sin(a*7.-t*.28)*3.+(n-.5)*warp*7.)),9.);
+ float corona=exp(-r*1.85)*(rays*.68+.15);
+ vec2 speck=q*vec2(110.,90.)+vec2(t*.7,-t*.38);
+ float speckSeed=hash21(floor(speck));
+ float sparks=step(.989,speckSeed)*exp(-88.*dot(fract(speck)-.5,fract(speck)-.5));
+ vec3 c=vec3(.007,.009,.024);
+ c+=vec3(.32,.04,.18)*exp(-r*1.7);
+ c+=vec3(1.45,.20,.14)*fire*(.4+bloom*.8);
+ c+=vec3(1.40,.7,.33)*core*(.45+bloom*.6);
+ c+=vec3(.40,.12,.57)*corona*1.2;
+ c+=vec3(1.5,1.04,.68)*(pow(core,1.6)*.24+pow(fire,5.)*.75)*(bloom+.18);
+ c+=vec3(1.4,.86,.53)*sparks*exp(-r*.5);
+ c*=1.-.55*smoothstep(1.0,1.75,r);
+ return c;
+}
+vec3 threads(vec2 p,float t,float warp,float bloom){
+ vec2 q=p*vec2(1.,1.05);
+ float n=fbm(q*1.7+vec2(t*.06,t*.1));
+ float bend=.31*sin(q.y*2.7+t*.16)+warp*.32*(n-.5)+.18*sin(q.y*5.-t*.25);
+ float u=q.x+bend;
+ float phase=u*27.+sin(q.y*3.2+t*.3)*2.3+(n-.5)*warp*9.;
+ float bright=pow(1.-abs(sin(phase)),24.);
+ float bright2=pow(1.-abs(sin(phase*.55+q.y*.9)),26.);
+ float gate=exp(-1.3*pow(q.x-.14*sin(q.y*2.),2.));
+ float streak=pow(max(.0,sin(q.y*8.+u*2.-t*.25)),15.);
+ vec3 c=mix(vec3(.008,.023,.048),vec3(.04,.015,.1),smoothstep(-.8,.8,q.x));
+ vec3 cyan=vec3(.08,.86,1.12),mag=vec3(.93,.15,.67),warm=vec3(1.,.45,.37);
+ vec3 col=mix(cyan,mag,.5+.5*sin(q.y*1.5+q.x*.8));
+ c+=gate*bright*col*(.45+bloom*1.28);
+ c+=gate*bright2*warm*(.15+bloom*.66);
+ c+=streak*.23*vec3(.1,.55,.9);
+ c+=gate*.12*(col+vec3(.1,.13,.22));
+ return c;
+}
+void main(){
+ vec2 frag=gl_FragCoord.xy;
+ vec2 uv=frag/u_resolution;
+ vec2 p=(2.*frag-u_resolution)/min(u_resolution.x,u_resolution.y);
+ float t=u_time;
+ vec2 pointer=(u_pointer*2.-1.)*vec2(u_resolution.x/u_resolution.y,1.);
+ pointer.y=-pointer.y;
+ float d=length(p-pointer*.55);
+ float ripple=exp(-d*2.4)*sin(d*12.-t*2.7)*.095*u_warp;
+ p+=normalize(p-pointer*.55+vec2(.0001)) * ripple;
+ p*=mix(.72,1.48,u_scale);
+ vec3 c;
+ if(u_mode<.5)c=silk(p,t,u_warp,u_bloom);
+ else if(u_mode<1.5)c=chrome(p,t,u_warp,u_bloom);
+ else if(u_mode<2.5)c=solar(p,t,u_warp,u_bloom);
+ else c=threads(p,t,u_warp,u_bloom);
+ c=colorShift(c,u_colorway);
+ float vignette=1.-.18*smoothstep(.25,1.6,length(p));
+ c=tonemap(c*mix(.67,1.38,u_bloom)*vignette);
+ c=pow(max(c,vec3(0.)),vec3(.90));
+ float grain=(hash21(frag+vec2(fract(t*.13)*437.13,fract(t*.27)*971.77))-.5)*u_grain*.19;
+ c=clamp(c+grain,0.,1.);
+ gl_FragColor=vec4(c,1.);
+}`;
+  const toast=message=>{
+    const node=document.querySelector('#toast'); node.textContent=message; node.classList.add('show');
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>node.classList.remove('show'),2400);
+  };
+  function compile(type,source){
+    const s=gl.createShader(type); gl.shaderSource(s,source);gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));
+    return s;
+  }
+  function initGL(){
+    try{
+      gl=canvas.getContext('webgl',{alpha:false,depth:false,antialias:false,stencil:false,preserveDrawingBuffer:true,powerPreference:'low-power'});
+      if(!gl)throw Error('WebGL unavailable');
+      program=gl.createProgram(); const vs=compile(gl.VERTEX_SHADER,vertex),fs=compile(gl.FRAGMENT_SHADER,fragment);
+      gl.attachShader(program,vs);gl.attachShader(program,fs);gl.linkProgram(program);
+      if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
+      gl.useProgram(program);gl.deleteShader(vs);gl.deleteShader(fs);
+      const buffer=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buffer);
+      gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,-1,1,1,-1,1,1]),gl.STATIC_DRAW);
+      const position=gl.getAttribLocation(program,'a_position');gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,2,gl.FLOAT,false,0,0);
+      ['resolution','pointer','time','mode','colorway','warp','bloom','grain','scale'].forEach(key=>loc[key]=gl.getUniformLocation(program,'u_'+key));
+      canvas.addEventListener('webglcontextlost',evt=>{evt.preventDefault();running=false;webglError='GPU context lost';setError(webglError);});
+      canvas.addEventListener('webglcontextrestored',()=>{location.reload();});
+      runtimeLabel.textContent='RENDERING';canvas.classList.add('ready');
+      return true;
+    } catch(e){ webglError=String(e.message||e);setError(webglError);return false;}
+  }
+  function setError(message){runtimeLabel.textContent='STATIC FALLBACK';runtimeLabel.title=message;canvas.style.display='none';fpsLabel.textContent='— FPS';document.body.dataset.fallback='1';}
+  function uniforms(w,h,renderMode,renderTime){
+    gl.uniform2f(loc.resolution,w,h);
+    gl.uniform2f(loc.pointer,mouse.x,mouse.y);
+    gl.uniform1f(loc.time,renderTime);
+    gl.uniform1f(loc.mode,renderMode);
+    gl.uniform1f(loc.colorway,colorway);
+    gl.uniform1f(loc.warp,settings.warp/100*1.65);
+    gl.uniform1f(loc.bloom,settings.bloom/100*1.28);
+    gl.uniform1f(loc.grain,settings.grain/100);
+    gl.uniform1f(loc.scale,settings.scale/100);
+  }
+  function render(width=canvas.width,height=canvas.height,selected=mode,stamp=time){
+    if(!gl || !program || gl.isContextLost())return;
+    gl.viewport(0,0,width,height);uniforms(width,height,selected,stamp);gl.drawArrays(gl.TRIANGLES,0,6);
+  }
+  function rescale(){
+    if(!gl)return;
+    const rect=canvas.getBoundingClientRect();if(!rect.width||!rect.height)return;
+    const ratio=Math.min(devicePixelRatio||1,quality==='full'?(touchDevice?1.35:1.8):quality==='lite'?.88:1.25);
+    const factor=quality==='lite'?.72:quality==='full'?.94:.9;
+    const width=Math.max(2,Math.round(rect.width*ratio*factor)),height=Math.max(2,Math.round(rect.height*ratio*factor));
+    if(canvas.width!==width||canvas.height!==height){canvas.width=width;canvas.height=height;resLabel.textContent=width+' × '+height;}
+    render();
+  }
+  function refreshThumbs(){
+    if(!gl)return;
+    const targetW=240,targetH=142;
+    const thumbCanvases=[...document.querySelectorAll('.thumb canvas')];
+    const pixels=new Uint8Array(targetW*targetH*4);const flipped=new Uint8ClampedArray(pixels.length);
+    for(let i=0;i<thumbCanvases.length;i++){
+      render(targetW,targetH,i,4.25);gl.readPixels(0,0,targetW,targetH,gl.RGBA,gl.UNSIGNED_BYTE,pixels);
+      for(let y=0;y<targetH;y++)flipped.set(pixels.subarray((targetH-y-1)*targetW*4,(targetH-y)*targetW*4),y*targetW*4);
+      const ctx=thumbCanvases[i].getContext('2d');ctx.putImageData(new ImageData(flipped,targetW,targetH),0,0);
+    }
+    render();textureReady=true;
+  }
+  function animate(now){
+    raf=0;if(!gl||!visible)return;
+    const targetFPS=quality==='full'?(touchDevice?45:60):quality==='lite'?30:1;
+    if(now-lastFrame<1000/targetFPS-1){if(running)raf=requestAnimationFrame(animate);return;}
+    let delta=Math.min((now-last||16)/1000,.08); last=now;lastFrame=now;
+    if(running && quality!=='static' && !reducedQuery.matches)time+=delta*(settings.motion/40);
+    mouse.x+=(mouseTarget.x-mouse.x)*Math.min(1,delta*6.);
+    mouse.y+=(mouseTarget.y-mouse.y)*Math.min(1,delta*6.);
+    render();frameCount++;
+    if(now-fpsTime>=1000){fpsLabel.textContent=Math.round(frameCount*1000/Math.max(now-fpsTime,1))+' FPS';fpsTime=now;frameCount=0;}
+    if(running && quality!=='static' && !reducedQuery.matches)raf=requestAnimationFrame(animate);
+  }
+  function ensureLoop(){cancelAnimationFrame(raf);raf=0;last=0;lastFrame=0;
+    if(gl){render();if(running&&quality!=='static'&&!reducedQuery.matches&&visible)raf=requestAnimationFrame(animate);}
+  }
+  function changePreset(value){mode=clamp(value,0,3);presetButtons.forEach((button,i)=>button.setAttribute('aria-pressed',i===mode));activeLabel.textContent=labels[mode];descriptionLabel.textContent=descriptions[mode];document.body.dataset.preset=String(mode);render();}
+  function changeQuality(value){if(!['full','lite','static'].includes(value))return;quality=value;qualityButtons.forEach(button=>button.setAttribute('aria-pressed',button.dataset.quality===value));running=value!=='static'&&!reducedQuery.matches;document.querySelector('#pause').querySelector('.btn-copy').textContent=running?'PAUSE':'PLAY';document.querySelector('#pause span:first-child').textContent=running?'Ⅱ':'▶';rescale();ensureLoop();}
+  function sliderChange(name,value){settings[name]=clamp(Number(value),0,100);document.querySelector('#'+name).value=String(settings[name]);document.querySelector('#'+name+'-out').textContent=String(settings[name]).padStart(2,'0');render();}
+  opts.forEach(name=>document.querySelector('#'+name).addEventListener('input',event=>sliderChange(name,event.target.value)));
+  presetButtons.forEach(button=>button.addEventListener('click',()=>changePreset(+button.dataset.preset)));
+  qualityButtons.forEach(button=>button.addEventListener('click',()=>changeQuality(button.dataset.quality)));
+  colorButtons.forEach(button=>button.addEventListener('click',()=>{colorway=Number(button.dataset.color);colorButtons.forEach(b=>b.setAttribute('aria-pressed',b===button));refreshThumbs();render();}));
+  document.querySelector('#pause').addEventListener('click',()=>{
+    if(quality==='static'){changeQuality('lite');return;}
+    running=!running;document.querySelector('#pause .btn-copy').textContent=running?'PAUSE':'PLAY';document.querySelector('#pause span:first-child').textContent=running?'Ⅱ':'▶';ensureLoop();
+  });
+  document.querySelector('#snapshot').addEventListener('click',()=>{
+    if(!gl){toast('WebGL unavailable — no shader frame to export');return;}
+    render();const url=canvas.toDataURL('image/png');const a=document.createElement('a');a.href=url;a.download='ui-forge-'+labels[mode].toLowerCase().replaceAll(' ','-')+'-'+Date.now()+'.png';document.body.appendChild(a);a.click();a.remove();toast('PNG frame exported');
+  });
+  document.querySelector('#reset-controls').addEventListener('click',()=>{Object.entries(defaults).forEach(([key,value])=>sliderChange(key,value));refreshThumbs();toast('Parameters reset');});
+  document.querySelector('#randomize').addEventListener('click',()=>{for(let i=0;i<opts.length;i++){let name=opts[i];sliderChange(name,Math.round(15+Math.random()*75));}refreshThumbs();toast('New material variation');});
+  document.querySelector('#copy-config').addEventListener('click',async()=>{
+    const state=JSON.stringify({schema:'ui-forge-shader-config-v1',shader:'spectral-materials-01',preset:labels[mode],presetIndex:mode,colorway,quality,parameters:{...settings}},null,2);
+    try{if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(state);else{const area=document.createElement('textarea');area.value=state;document.body.appendChild(area);area.select();if(!document.execCommand('copy'))throw Error('Copy blocked');area.remove();}toast('Reproducible configuration copied');}catch{toast('Clipboard blocked by browser settings');}
+  });
+  function movePointer(e){const rect=canvas.getBoundingClientRect();mouseTarget={x:clamp((e.clientX-rect.left)/rect.width,0,1),y:clamp((e.clientY-rect.top)/rect.height,0,1)};if(!running){mouse={...mouseTarget};render();}}
+  canvas.addEventListener('pointermove',movePointer);
+  canvas.addEventListener('pointerdown',movePointer);
+  canvas.addEventListener('keydown',e=>{const d={ArrowLeft:[-.06,0],ArrowRight:[.06,0],ArrowUp:[0,-.06],ArrowDown:[0,.06]};if(d[e.key]){e.preventDefault();mouseTarget={x:clamp(mouseTarget.x+d[e.key][0],0,1),y:clamp(mouseTarget.y+d[e.key][1],0,1)};mouse={...mouseTarget};render();}});
+  reducedQuery.addEventListener('change',()=>{running=!reducedQuery.matches && quality!=='static';ensureLoop();});
+  new IntersectionObserver(([entry])=>{visible=entry.isIntersecting;if(visible)ensureLoop();else{cancelAnimationFrame(raf);raf=0;}},{threshold:.02}).observe(stage);
+  window.addEventListener('visibilitychange',()=>{if(!document.hidden)ensureLoop();else cancelAnimationFrame(raf);});
+  window.addEventListener('resize',()=>{rescale();}, {passive:true});
+  const params=new URLSearchParams(location.search);const fromUrl=params.get('preset');if(fromUrl!==null&&/^[0-3]$/.test(fromUrl))changePreset(Number(fromUrl));
+  const requestedQuality=params.get('quality');if(requestedQuality&&['full','lite','static'].includes(requestedQuality))quality=requestedQuality;
+  if(reducedQuery.matches)quality='static';
+  if(initGL()){
+    changeQuality(quality);refreshThumbs();ensureLoop();
+    document.body.dataset.ready='1';
+  }else{
+    document.body.dataset.ready='0';
+  }
+  window.__SHADER_LAB_TEST__={get state(){return {mode,colorway,quality,running,webgl:!!gl&&!webglError,error:webglError,thumbnailReady:textureReady,settings:{...settings},frame:frameCount};},shaderSource:fragment};
+})();
+
+</script>
+</body>
+</html>
